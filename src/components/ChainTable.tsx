@@ -238,8 +238,7 @@ function ChainRow({ chain, hideTicker }: { chain: Chain; hideTicker?: boolean })
 }
 
 // ── Ticker group: header row + expandable chain rows ─────────────────────────
-function TickerGroup({ ticker, chains }: { ticker: string; chains: Chain[] }) {
-  const [open, setOpen] = useState(true); // default expanded
+function TickerGroup({ ticker, chains, open, onToggle }: { ticker: string; chains: Chain[]; open: boolean; onToggle: () => void }) {
 
   const combined = tickerCombinedCostBasis(chains);
   const groupNetPnl = chains.reduce(
@@ -251,7 +250,7 @@ function TickerGroup({ ticker, chains }: { ticker: string; chains: Chain[] }) {
     <>
       {/* Ticker group header */}
       <tr
-        onClick={() => setOpen((o) => !o)}
+        onClick={onToggle}
         className="cursor-pointer"
         style={{
           backgroundColor: "rgba(30,45,69,0.35)",
@@ -320,6 +319,26 @@ function Section({ title, chains }: { title: string; chains: Chain[] }) {
     groups.set(chain.ticker, arr);
   }
 
+  const tickers = Array.from(groups.keys());
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>(
+    () => Object.fromEntries(tickers.map((t) => [t, true]))
+  );
+
+  const allExpanded = tickers.every((t) => openMap[t]);
+  const allCollapsed = tickers.every((t) => !openMap[t]);
+
+  function toggleTicker(ticker: string) {
+    setOpenMap((m) => ({ ...m, [ticker]: !m[ticker] }));
+  }
+
+  function expandAll() {
+    setOpenMap(Object.fromEntries(tickers.map((t) => [t, true])));
+  }
+
+  function collapseAll() {
+    setOpenMap(Object.fromEntries(tickers.map((t) => [t, false])));
+  }
+
   return (
     <div
       className="rounded-xl overflow-hidden mb-5"
@@ -336,9 +355,29 @@ function Section({ title, chains }: { title: string; chains: Chain[] }) {
         >
           {title}
         </span>
-        <span className="text-xs font-mono" style={{ color: C.muted }}>
-          {chains.length} chain{chains.length !== 1 ? "s" : ""}
-        </span>
+        <div className="flex items-center gap-3">
+          {!allExpanded && (
+            <button
+              onClick={expandAll}
+              className="text-xs transition-opacity hover:opacity-70"
+              style={{ color: C.muted }}
+            >
+              Expand all
+            </button>
+          )}
+          {!allCollapsed && (
+            <button
+              onClick={collapseAll}
+              className="text-xs transition-opacity hover:opacity-70"
+              style={{ color: C.muted }}
+            >
+              Collapse all
+            </button>
+          )}
+          <span className="text-xs font-mono" style={{ color: C.muted }}>
+            {chains.length} chain{chains.length !== 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
 
       {/* Table */}
@@ -364,7 +403,13 @@ function Section({ title, chains }: { title: string; chains: Chain[] }) {
           </thead>
           <tbody>
             {Array.from(groups.entries()).map(([ticker, tickerChains]) => (
-              <TickerGroup key={ticker} ticker={ticker} chains={tickerChains} />
+              <TickerGroup
+                key={ticker}
+                ticker={ticker}
+                chains={tickerChains}
+                open={openMap[ticker] ?? true}
+                onToggle={() => toggleTicker(ticker)}
+              />
             ))}
           </tbody>
         </table>
