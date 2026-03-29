@@ -113,7 +113,8 @@ export function buildChains(txs: Transaction[]): Chain[] {
     return Object.values(openChains).filter((c) => c.status === "ASSIGNED");
   }
 
-  for (const tx of sorted) {
+  function applyTx(tx: Transaction): boolean {
+    // Returns false if the tx could not be applied (deferred BTC case)
     const { action, optionType, amount: amt, quantity: contracts } = tx;
     const expiry = tx.expiry ?? "";
 
@@ -169,24 +170,26 @@ export function buildChains(txs: Transaction[]): Chain[] {
         };
         putExpiryMap[expiry] = cid;
       }
+      return true;
     }
 
     // ── BUY TO CLOSE (PUT) ──────────────────────────────────────
-    else if (action === "BTC" && optionType === "PUT") {
+    if (action === "BTC" && optionType === "PUT") {
       const cid = putExpiryMap[expiry];
-      if (!cid || !openChains[cid]) continue;
+      if (!cid || !openChains[cid]) return false; // defer — expiry not yet opened
       const ch = openChains[cid];
       ch.netPnl += amt;
       ch.legs.push(makeLeg(tx, "roll_close", amt));
       ch._awaitingRollOpen = true;
       ch._lastCloseDate = tx.date;
       delete putExpiryMap[expiry];
+      return true;
     }
 
     // ── EXPIRED (PUT) ───────────────────────────────────────────
-    else if (action === "Expired" && optionType === "PUT") {
+    if (action === "Expired" && optionType === "PUT") {
       const cid = putExpiryMap[expiry];
-      if (!cid || !openChains[cid]) continue;
+      if (!cid || !openChains[cid]) return true;
       const ch = openChains[cid];
       ch.legs.push(makeLeg(tx, "expired", 0));
       ch.status = "EXPIRED";
@@ -197,24 +200,26 @@ export function buildChains(txs: Transaction[]): Chain[] {
       chains.push(finalizeChain(ch, today));
       delete putExpiryMap[expiry];
       delete openChains[cid];
+      return true;
     }
 
     // ── ASSIGNED (PUT) — stock acquired ─────────────────────────
-    else if (action === "Assigned" && optionType === "PUT") {
+    if (action === "Assigned" && optionType === "PUT") {
       const cid = putExpiryMap[expiry];
-      if (!cid || !openChains[cid]) continue;
+      if (!cid || !openChains[cid]) return true;
       const ch = openChains[cid];
       ch.legs.push(makeLeg(tx, "assigned", amt));
       ch.status = "ASSIGNED";
       ch.pendingPremium = 0;
       delete putExpiryMap[expiry];
       // stays in openChains for CC tracking
+      return true;
     }
 
     // ── ASSIGNED (CALL) — stock called away, wheel complete ─────
-    else if (action === "Assigned" && optionType === "CALL") {
+    if (action === "Assigned" && optionType === "CALL") {
       const cid = callExpiryMap[expiry];
-      if (!cid || !openChains[cid]) continue;
+      if (!cid || !openChains[cid]) return true;
       const ch = openChains[cid];
       ch.legs.push(makeLeg(tx, "call_assigned", amt));
       ch.status = "COMPLETED";
@@ -225,16 +230,13 @@ export function buildChains(txs: Transaction[]): Chain[] {
       chains.push(finalizeChain(ch, today));
       delete callExpiryMap[expiry];
       delete openChains[cid];
+      return true;
     }
 
     // ── SELL TO OPEN (CALL) — covered call ──────────────────────
-    // Attribution: if multiple assigned chains exist, give CC to the most
-    // recently opened one. Rationale: the CC written after the latest assignment
-    // covers the combined position; attributing to the newest chain matches
-    // trader intuition and keeps per-chain cost basis clean.
-    else if (action === "STO" && optionType === "CALL") {
+    if (action === "STO" && optionType === "CALL") {
       const assigned = getAssignedChains();
-      if (!assigned.length) continue;
+      if (!assigned.length) return true;
       const owner = assigned.reduce((latest, c) =>
         c.openDate > latest.openDate ? c : latest
       );
@@ -244,32 +246,54 @@ export function buildChains(txs: Transaction[]): Chain[] {
       owner.currentStrike = tx.strike;
       owner.currentExpiry = expiry;
       callExpiryMap[expiry] = owner.chainId;
+      return true;
     }
 
     // ── BUY TO CLOSE (CALL) ─────────────────────────────────────
-    else if (action === "BTC" && optionType === "CALL") {
+    if (action === "BTC" && optionType === "CALL") {
       const cid = callExpiryMap[expiry];
-      if (!cid || !openChains[cid]) continue;
+      if (!cid || !openChains[cid]) return true;
       const ch = openChains[cid];
       ch.netPnl += amt;
       ch.legs.push(makeLeg(tx, "call_close", amt));
       ch.currentStrike = null;
       ch.currentExpiry = null;
       delete callExpiryMap[expiry];
+      return true;
     }
 
     // ── EXPIRED (CALL) ───────────────────────────────────────────
-    else if (action === "Expired" && optionType === "CALL") {
+    if (action === "Expired" && optionType === "CALL") {
       const cid = callExpiryMap[expiry];
-      if (!cid || !openChains[cid]) continue;
+      if (!cid || !openChains[cid]) return true;
       openChains[cid].legs.push(makeLeg(tx, "call_expired", 0));
       openChains[cid].currentExpiry = null;
       openChains[cid].currentStrike = null;
       delete callExpiryMap[expiry];
+      return true;
     }
 
     // Plain Buy/Sell stock transactions (settlement of assignment) are intentionally
     // skipped — assignment cost is derived from PUT strike × contracts.
+    return true;
+  }
+
+  // Process day-by-day so deferred BTCs can be retried after same-day STOs
+  const dates = [...new Set(sorted.map((tx) => tx.date))].sort();
+  for (const date of dates) {
+    const dayTxs = sorted.filter((tx) => tx.date === date);
+    const deferred: Transaction[] = [];
+
+    for (const tx of dayTxs) {
+      if (!applyTx(tx)) {
+        deferred.push(tx);
+      }
+    }
+
+    // Retry deferred BTCs now that same-day STOs have registered their expiries
+    for (const tx of deferred) {
+      applyTx(tx);
+    }
   }
 
   // Finalize remaining open/assigned chains
