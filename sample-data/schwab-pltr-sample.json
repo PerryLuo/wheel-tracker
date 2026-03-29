@@ -1,0 +1,140 @@
+{
+  "FromDate": "09/09/2025",
+  "ToDate": "03/09/2026",
+  "TotalTransactionsAmount": "$901.36",
+  "TotalFeesAndCommAmount": "$4.64",
+  "BrokerageTransactions": [
+    {
+      "Date": "03/09/2026 as of 03/06/2026",
+      "Action": "Assigned",
+      "Symbol": "PLTR 03/06/2026 148.00 C",
+      "Description": "CALL PALANTIR TECHNOLOGI$148 EXP 03/06/26",
+      "Quantity": "1",
+      "Price": "",
+      "Fees & Comm": "",
+      "Amount": "",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "03/09/2026 as of 03/06/2026",
+      "Action": "Sell",
+      "Symbol": "PLTR",
+      "Description": "PALANTIR TECHNOLOGIES INCLASS CLASS A",
+      "Quantity": "100",
+      "Price": "$148.00",
+      "Fees & Comm": "$0.02",
+      "Amount": "$14,799.98",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "03/02/2026",
+      "Action": "Sell to Open",
+      "Symbol": "PLTR 03/06/2026 148.00 C",
+      "Description": "CALL PALANTIR TECHNOLOGI$148 EXP 03/06/26",
+      "Quantity": "1",
+      "Price": "$3.05",
+      "Fees & Comm": "$0.66",
+      "Amount": "$304.34",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "03/02/2026 as of 02/27/2026",
+      "Action": "Expired",
+      "Symbol": "PLTR 02/27/2026 145.00 C",
+      "Description": "CALL PALANTIR TECHNOLOGI$145 EXP 02/27/26",
+      "Quantity": "1",
+      "Price": "",
+      "Fees & Comm": "",
+      "Amount": "",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "02/18/2026",
+      "Action": "Sell to Open",
+      "Symbol": "PLTR 02/27/2026 145.00 C",
+      "Description": "CALL PALANTIR TECHNOLOGI$145 EXP 02/27/26",
+      "Quantity": "1",
+      "Price": "$2.25",
+      "Fees & Comm": "$0.66",
+      "Amount": "$224.34",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "02/13/2026 as of 02/12/2026",
+      "Action": "Assigned",
+      "Symbol": "PLTR 02/13/2026 150.00 P",
+      "Description": "PUT PALANTIR TECHNOLOGIE$150 EXP 02/13/26",
+      "Quantity": "1",
+      "Price": "",
+      "Fees & Comm": "",
+      "Amount": "",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "02/13/2026 as of 02/12/2026",
+      "Action": "Buy",
+      "Symbol": "PLTR",
+      "Description": "PALANTIR TECHNOLOGIES INCLASS CLASS A",
+      "Quantity": "100",
+      "Price": "$150.00",
+      "Fees & Comm": "",
+      "Amount": "-$15,000.00",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "02/05/2026",
+      "Action": "Buy to Close",
+      "Symbol": "PLTR 02/06/2026 150.00 P",
+      "Description": "PUT PALANTIR TECHNOLOGIE$150 EXP 02/06/26",
+      "Quantity": "1",
+      "Price": "$18.75",
+      "Fees & Comm": "$0.66",
+      "Amount": "-$1,875.66",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "02/05/2026",
+      "Action": "Sell to Open",
+      "Symbol": "PLTR 02/13/2026 150.00 P",
+      "Description": "PUT PALANTIR TECHNOLOGIE$150 EXP 02/13/26",
+      "Quantity": "1",
+      "Price": "$19.25",
+      "Fees & Comm": "$0.66",
+      "Amount": "$1,924.34",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "01/29/2026",
+      "Action": "Sell to Open",
+      "Symbol": "PLTR 02/06/2026 150.00 P",
+      "Description": "PUT PALANTIR TECHNOLOGIE$150 EXP 02/06/26",
+      "Quantity": "1",
+      "Price": "$7.61",
+      "Fees & Comm": "$0.66",
+      "Amount": "$760.34",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "01/29/2026",
+      "Action": "Buy to Close",
+      "Symbol": "PLTR 01/30/2026 155.00 P",
+      "Description": "PUT PALANTIR TECHNOLOGIE$155 EXP 01/30/26",
+      "Quantity": "1",
+      "Price": "$5.01",
+      "Fees & Comm": "$0.66",
+      "Amount": "-$501.66",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "01/21/2026",
+      "Action": "Sell to Open",
+      "Symbol": "PLTR 01/30/2026 155.00 P",
+      "Description": "PUT PALANTIR TECHNOLOGIE$155 EXP 01/30/26",
+      "Quantity": "1",
+      "Price": "$2.66",
+      "Fees & Comm": "$0.66",
+      "Amount": "$265.34",
+      "AcctgRuleCd": "1"
+    }
+  ]
+}

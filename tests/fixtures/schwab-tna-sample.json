@@ -1,0 +1,118 @@
+{
+  "FromDate": "09/09/2025",
+  "ToDate": "03/09/2026",
+  "TotalTransactionsAmount": "-$13,739.96",
+  "TotalFeesAndCommAmount": "$9.96",
+  "BrokerageTransactions": [
+    {
+      "Date": "03/09/2026 as of 03/06/2026",
+      "Action": "Assigned",
+      "Symbol": "TNA 03/06/2026 50.00 P",
+      "Description": "PUT DRXN SMLCAP BULL 3X $50 EXP 03/06/26",
+      "Quantity": "3",
+      "Price": "",
+      "Fees & Comm": "",
+      "Amount": "",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "03/09/2026 as of 03/06/2026",
+      "Action": "Buy",
+      "Symbol": "TNA",
+      "Description": "DIREXION DAILY SMALL CAPBULL 3X SHARES",
+      "Quantity": "300",
+      "Price": "$50.00",
+      "Fees & Comm": "",
+      "Amount": "-$15,000.00",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "03/05/2026",
+      "Action": "Sell to Open",
+      "Symbol": "TNA 03/13/2026 44.00 P",
+      "Description": "PUT DRXN SMLCAP BULL 3X $44 EXP 03/13/26",
+      "Quantity": "3",
+      "Price": "$0.87",
+      "Fees & Comm": "$2.00",
+      "Amount": "$259.00",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "02/26/2026",
+      "Action": "Sell to Open",
+      "Symbol": "TNA 03/06/2026 50.00 P",
+      "Description": "PUT DRXN SMLCAP BULL 3X $50 EXP 03/06/26",
+      "Quantity": "3",
+      "Price": "$1.15",
+      "Fees & Comm": "$1.99",
+      "Amount": "$343.01",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "02/23/2026 as of 02/20/2026",
+      "Action": "Expired",
+      "Symbol": "TNA 02/20/2026 51.00 P",
+      "Description": "PUT DRXN SMLCAP BULL 3X $51 EXP 02/20/26",
+      "Quantity": "3",
+      "Price": "",
+      "Fees & Comm": "",
+      "Amount": "",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "02/17/2026",
+      "Action": "Sell to Open",
+      "Symbol": "TNA 02/20/2026 51.00 P",
+      "Description": "PUT DRXN SMLCAP BULL 3X $51 EXP 02/20/26",
+      "Quantity": "3",
+      "Price": "$0.74",
+      "Fees & Comm": "$1.99",
+      "Amount": "$220.01",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "02/09/2026 as of 02/06/2026",
+      "Action": "Expired",
+      "Symbol": "TNA 02/06/2026 53.00 P",
+      "Description": "PUT DRXN SMLCAP BULL 3X $53 EXP 02/06/26",
+      "Quantity": "2",
+      "Price": "",
+      "Fees & Comm": "",
+      "Amount": "",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "01/30/2026",
+      "Action": "Sell to Open",
+      "Symbol": "TNA 02/06/2026 53.00 P",
+      "Description": "PUT DRXN SMLCAP BULL 3X $53 EXP 02/06/26",
+      "Quantity": "2",
+      "Price": "$2.50",
+      "Fees & Comm": "$1.33",
+      "Amount": "$498.67",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "01/30/2026",
+      "Action": "Buy to Close",
+      "Symbol": "TNA 01/30/2026 53.00 P",
+      "Description": "PUT DRXN SMLCAP BULL 3X $53 EXP 01/30/26",
+      "Quantity": "2",
+      "Price": "$1.14",
+      "Fees & Comm": "$1.32",
+      "Amount": "-$229.32",
+      "AcctgRuleCd": "1"
+    },
+    {
+      "Date": "01/23/2026",
+      "Action": "Sell to Open",
+      "Symbol": "TNA 01/30/2026 53.00 P",
+      "Description": "PUT DRXN SMLCAP BULL 3X $53 EXP 01/30/26",
+      "Quantity": "2",
+      "Price": "$0.85",
+      "Fees & Comm": "$1.33",
+      "Amount": "$168.67",
+      "AcctgRuleCd": "1"
+    }
+  ]
+}

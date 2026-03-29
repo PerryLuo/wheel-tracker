@@ -1,0 +1,1617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wheel Strategy Tracker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2234;
+    --border: #1e2d45;
+    --accent: #00d4aa;
+    --accent2: #3b82f6;
+    --red: #f43f5e;
+    --green: #10b981;
+    --muted: #4b6080;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    font-size: 14px;
+  }
+
+  /* ── Tab Bar ── */
+  .tab-bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 32px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .tab-bar-title {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-right: 20px;
+  }
+
+  .tab-btn {
+    padding: 7px 18px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: var(--sans);
+    font-weight: 500;
+    color: var(--text2);
+    background: transparent;
+    transition: all 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); background: var(--surface2); }
+  .tab-btn.active { color: var(--accent); border-color: rgba(0,212,170,0.3); background: rgba(0,212,170,0.06); }
+
+  .tab-spacer { flex: 1; }
+
+  /* ── Main ── */
+  .main { padding: 32px; max-width: 1200px; margin: 0 auto; }
+
+  /* ── KPI Row ── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .kpi.blue { border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.05); }
+
+  .kpi-label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; }
+  .kpi-value { font-size: 26px; font-family: var(--mono); font-weight: 500; }
+  .kpi-sub   { font-size: 11px; color: var(--text2); margin-top: 4px; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .card:last-child { margin-bottom: 0; }
+
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.8px; }
+  .card-body  { padding: 20px; }
+  .card-body-scroll { overflow-x: auto; }
+
+  /* ── Toggle ── */
+  .toggle-group {
+    display: flex;
+    gap: 4px;
+    background: var(--surface2);
+    border-radius: 8px;
+    padding: 3px;
+  }
+  .toggle-btn {
+    padding: 5px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--sans);
+    font-weight: 500;
+    color: var(--text2);
+    background: transparent;
+    transition: all 0.15s;
+  }
+  .toggle-btn.active { background: var(--surface); color: var(--text); }
+
+  /* ── Table ── */
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(30,45,69,0.5);
+    font-size: 13px;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.01); }
+
+  /* ── Tags ── */
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    font-family: var(--mono);
+  }
+  .tag-sell     { background: rgba(0,212,170,0.15); color: var(--accent); }
+  .tag-buy      { background: rgba(244,63,94,0.15);  color: var(--red); }
+  .tag-expired  { background: rgba(148,163,184,0.15); color: var(--text2); }
+  .tag-assigned { background: rgba(251,146,60,0.15);  color: #fb923c; }
+
+  /* ── Buttons ── */
+  .btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: var(--sans);
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-primary:hover { background: #00bfa0; }
+  .btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text2); }
+  .btn-danger { background: rgba(244,63,94,0.15); color: var(--red); border: 1px solid rgba(244,63,94,0.2); }
+  .btn-danger:hover { background: rgba(244,63,94,0.25); }
+  .btn-sm { padding: 4px 8px; font-size: 11px; }
+
+  /* ── Page header ── */
+  .page-header { margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; }
+  .page-title  { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+  .page-subtitle { font-size: 13px; color: var(--text2); }
+
+  /* ── Bar chart ── */
+  .bar-chart { display: flex; flex-direction: column; gap: 6px; }
+  .bar-row { display: grid; grid-template-columns: 60px 1fr 80px; gap: 8px; align-items: center; }
+  .bar-label { font-size: 11px; color: var(--text2); font-family: var(--mono); text-align: right; }
+  .bar-track { height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+  .bar-fill.pos { background: var(--accent); }
+  .bar-fill.neg { background: var(--red); }
+  .bar-val { font-size: 11px; font-family: var(--mono); text-align: right; }
+
+  /* ── Colors ── */
+  .pos   { color: var(--accent); }
+  .neg   { color: var(--red); }
+  .muted { color: var(--text2); }
+  .mono  { font-family: var(--mono); }
+
+  /* ── Two column layout ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+
+  /* ── Empty state ── */
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center; }
+  .empty-icon  { font-size: 40px; margin-bottom: 16px; opacity: 0.3; }
+  .empty-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--text2); }
+  .empty-sub   { font-size: 13px; color: var(--muted); }
+
+  /* ── Loading ── */
+  .loading { display: flex; align-items: center; gap: 12px; padding: 60px; justify-content: center; color: var(--text2); }
+  .spinner {
+    width: 20px; height: 20px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    width: 520px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal-title { font-size: 18px; font-weight: 600; margin-bottom: 20px; }
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 12px; color: var(--text2); margin-bottom: 6px; display: block; }
+  .form-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--sans);
+  }
+  .form-input:focus { outline: none; border-color: var(--accent); }
+  textarea.form-input { min-height: 140px; resize: vertical; font-family: var(--mono); font-size: 12px; }
+  select.form-input { cursor: pointer; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+  .error-msg { color: var(--red); font-size: 12px; margin-top: 8px; display: none; }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 13px;
+    z-index: 200;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s ease;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-color: var(--accent); color: var(--accent); }
+  .toast.error   { border-color: var(--red);   color: var(--red); }
+
+  /* ── Chain Status Tags ── */
+  .tag-status-open      { background: rgba(0,212,170,0.15); color: var(--accent); }
+  .tag-status-expired   { background: rgba(16,185,129,0.15); color: var(--green); }
+  .tag-status-assigned  { background: rgba(251,146,60,0.15); color: #fb923c; }
+  .tag-status-closed    { background: rgba(75,96,128,0.15); color: var(--muted); }
+  .tag-status-completed { background: rgba(59,130,246,0.15); color: var(--accent2); }
+
+  /* ── Leg Type Tags ── */
+  .tag-leg-open       { background: rgba(16,185,129,0.15); color: var(--green); }
+  .tag-leg-roll-close { background: rgba(244,63,94,0.15); color: var(--red); }
+  .tag-leg-roll-open  { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  .tag-leg-call-open  { background: rgba(168,85,247,0.15); color: #c084fc; }
+  .tag-leg-call-close { background: rgba(168,85,247,0.1); color: #a855f7; }
+  .tag-leg-assigned      { background: rgba(59,130,246,0.15); color: var(--accent2); }
+  .tag-leg-call-assigned { background: rgba(59,130,246,0.15); color: var(--accent2); }
+  .tag-leg-call-expired  { background: rgba(148,163,184,0.15); color: var(--text2); }
+  .tag-leg-expired       { background: rgba(148,163,184,0.15); color: var(--text2); }
+
+  /* ── Wheel Summary Block (inside expanded chain) ── */
+  .wheel-summary {
+    background: rgba(59,130,246,0.04);
+    border: 1px solid rgba(59,130,246,0.15);
+    border-radius: 8px;
+    padding: 14px 20px;
+    margin: 8px 16px 12px;
+  }
+  .wheel-summary-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent2);
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+  .wheel-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+  .wheel-summary-item { }
+  .wheel-summary-label { font-size: 11px; color: var(--text2); margin-bottom: 2px; }
+  .wheel-summary-value { font-size: 16px; font-family: var(--mono); font-weight: 500; }
+  .wheel-summary-detail {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 16px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(59,130,246,0.12);
+  }
+  .wheel-detail-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+  }
+  .wheel-detail-label { color: var(--text2); }
+  .wheel-detail-value { font-family: var(--mono); }
+
+  /* ── Chain table rows ── */
+  .chain-summary-row { cursor: pointer; transition: background 0.1s; }
+  .chain-summary-row:hover td { background: rgba(255,255,255,0.02); }
+  .chain-legs-row { display: none; }
+  .chain-legs-row.open { display: table-row; }
+  .chain-legs-inner { background: var(--surface2); }
+
+  /* ── Leg sub-rows ── */
+  .leg-row {
+    display: grid;
+    grid-template-columns: 88px 100px 1fr 100px;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 28px;
+    border-bottom: 1px solid rgba(30,45,69,0.4);
+    font-size: 12px;
+  }
+  .leg-row:last-child { border-bottom: none; }
+
+  /* ── Cost basis inline ── */
+  .cost-basis-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: var(--mono);
+    background: rgba(0,212,170,0.08);
+    color: var(--accent);
+    border: 1px solid rgba(0,212,170,0.2);
+    margin-left: 8px;
+  }
+
+  /* ── Aggregate summary row ── */
+  tr.agg-row td {
+    background: rgba(0,212,170,0.04);
+    border-top: 1px solid var(--border);
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  /* ── Ticker group header row ── */
+  .ticker-header-row td { background: rgba(0,0,0,0.25); border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .ticker-assign-count {
+    display: inline-block;
+    margin-left: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  .ticker-cb-inline {
+    margin-left: 10px;
+    font-size: 12px;
+    color: var(--text2);
+  }
+  .ticker-cb-inline strong { color: var(--text); }
+
+  /* ── Cost basis breakdown table ── */
+  .cb-breakdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 4px;
+  }
+  .cb-breakdown-table th {
+    text-align: left;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    color: var(--text2);
+    padding: 6px 12px 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-weight: 500;
+  }
+  .cb-breakdown-row td {
+    padding: 10px 12px 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: middle;
+  }
+  .cb-total-row td {
+    padding: 10px 12px 4px 0;
+    border-top: 1px solid rgba(0,212,170,0.25);
+    vertical-align: middle;
+  }
+  .cb-total-row .accent { color: var(--accent); }
+
+  /* ── Ticker link in chains view ── */
+  .ticker-link {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-color: rgba(148,163,184,0.3);
+    transition: color 0.15s;
+  }
+  .ticker-link:hover { color: var(--accent); }
+
+  /* ── Back link ── */
+  .back-link {
+    color: var(--text2);
+    cursor: pointer;
+    font-size: 13px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .back-link:hover { color: var(--text); }
+
+  /* ── Ticker detail cost basis block ── */
+  .ticker-cb-block {
+    background: rgba(0,212,170,0.05);
+    border: 1px solid rgba(0,212,170,0.2);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .ticker-cb-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--accent); margin-bottom: 12px; }
+  .ticker-cb-grid  { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .ticker-cb-label { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
+  .ticker-cb-value { font-size: 20px; font-family: var(--mono); font-weight: 500; }
+
+  /* ── P&L expandable period rows ── */
+  .pnl-main-table { width: 100%; border-collapse: collapse; }
+  .pnl-period-row { cursor: pointer; }
+  .pnl-period-row:hover td { background: rgba(255,255,255,0.03); }
+  .pnl-period-row td { padding: 12px; border-bottom: 1px solid var(--border); }
+  .pnl-chevron { color: var(--text2); font-size: 11px; margin-right: 6px; }
+
+  /* Level 1: period detail container */
+  .pnl-detail-row          { display: none; }
+  .pnl-detail-row.open     { display: table-row; }
+  .pnl-detail-row > td     { padding: 0 !important; border-bottom: 2px solid var(--border); }
+
+  /* Ticker list inside a period */
+  .pnl-ticker-list { background: rgba(0,0,0,0.18); }
+
+  /* Level 2: ticker subtotal row — 5-column grid matching table */
+  .pnl-ticker-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    align-items: center;
+    padding: 9px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    transition: background 0.1s;
+  }
+  .pnl-ticker-row:hover { background: rgba(255,255,255,0.03); }
+
+  /* Level 3: individual transactions under a ticker */
+  .pnl-ticker-detail        { display: none; background: rgba(0,0,0,0.15); }
+  .pnl-ticker-detail.open   { display: block; }
+
+  .pnl-tx-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    align-items: center;
+    padding: 6px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+  }
+  .pnl-tx-row:last-child { border-bottom: none; }
+
+  @media (max-width: 900px) {
+    .kpi-row { grid-template-columns: 1fr 1fr; }
+    .two-col { grid-template-columns: 1fr; }
+    .main { padding: 16px; }
+    .tab-bar { padding: 10px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Tab Bar -->
+<div class="tab-bar">
+  <div class="tab-bar-title">Wheel</div>
+  <button class="tab-btn active" onclick="setView('pnl')" id="tab-pnl">P&amp;L</button>
+  <button class="tab-btn" onclick="setView('chains')" id="tab-chains">Chains</button>
+  <button class="tab-btn" onclick="setView('trades')" id="tab-trades">Trades</button>
+  <div class="tab-spacer"></div>
+  <button class="btn btn-ghost btn-sm" onclick="openImport()" style="margin-right:8px;">↑ Import</button>
+  <button class="btn btn-ghost btn-sm" onclick="openManual()">+ Add</button>
+</div>
+
+<!-- Main content -->
+<main class="main" id="main-content">
+  <div class="loading"><div class="spinner"></div>Loading...</div>
+</main>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal">
+    <div class="modal-title">Import Transactions</div>
+    <div class="form-group">
+      <label class="form-label">Paste Schwab JSON (transactions array)</label>
+      <textarea class="form-input" id="import-json" placeholder='[{"Date":"01/15/2025","Action":"Sell to Open","Symbol":"NVDA 01/17/2025 130.00 P",...}]'></textarea>
+    </div>
+    <div class="error-msg" id="import-error"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModals()">Cancel</button>
+      <button class="btn btn-primary" id="import-btn" onclick="doImport()">Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manual Add Modal -->
+<div class="modal-overlay" id="manual-modal">
+  <div class="modal">
+    <div class="modal-title">Add Trade Manually</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Date</label>
+        <input type="date" class="form-input" id="m-date">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Action</label>
+        <select class="form-input" id="m-action">
+          <option value="Sell to Open">Sell to Open</option>
+          <option value="Buy to Close">Buy to Close</option>
+          <option value="Expired">Expired</option>
+          <option value="Assigned">Assigned</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Underlying (e.g. NVDA)</label>
+        <input type="text" class="form-input" id="m-underlying" placeholder="NVDA">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Type</label>
+        <select class="form-input" id="m-type">
+          <option value="P">Put</option>
+          <option value="C">Call</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Strike Price</label>
+        <input type="number" class="form-input" id="m-strike" placeholder="130.00" step="0.5">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Expiry Date</label>
+        <input type="date" class="form-input" id="m-expiry">
+      </div>
+    </div>
+    <div class="form-row-3">
+      <div class="form-group">
+        <label class="form-label">Quantity (contracts)</label>
+        <input type="number" class="form-input" id="m-qty" placeholder="1" min="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Price per contract</label>
+        <input type="number" class="form-input" id="m-price" placeholder="2.50" step="0.01">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fees</label>
+        <input type="number" class="form-input" id="m-fees" placeholder="0.65" step="0.01">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Net Amount (negative = debit)</label>
+      <input type="number" class="form-input" id="m-amount" placeholder="245.35" step="0.01">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModals()">Cancel</button>
+      <button class="btn btn-primary" onclick="doManualAdd()">Add Trade</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────
+let state = {
+  view: 'pnl',
+  data: null,
+  pnlMode: 'weekly',
+  selectedTicker: null
+};
+
+// ── Init ───────────────────────────────────────────────────────
+window.onload = () => {
+  google.script.run
+    .withSuccessHandler(data => {
+      state.data = data;
+      render();
+    })
+    .withFailureHandler(err => {
+      document.getElementById('main-content').innerHTML =
+        '<div style="color:var(--red);padding:40px;">Error loading data: ' + (err.message || err) + '</div>';
+    })
+    .getAppData();
+};
+
+function loadData() {
+  document.getElementById('main-content').innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
+  google.script.run
+    .withSuccessHandler(data => {
+      state.data = data;
+      render();
+    })
+    .withFailureHandler(err => {
+      showToast('Error: ' + (err.message || err), 'error');
+    })
+    .getAppData();
+}
+
+// ── Tab Navigation ─────────────────────────────────────────────
+function setView(view) {
+  state.view = view;
+  state.selectedTicker = null;
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  const tab = document.getElementById('tab-' + view);
+  if (tab) tab.classList.add('active');
+  render();
+}
+
+function openTicker(ticker) {
+  state.selectedTicker = ticker;
+  state.view = 'ticker';
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  render();
+}
+
+// ── Render ─────────────────────────────────────────────────────
+function render() {
+  if (!state.data) return;
+  const main = document.getElementById('main-content');
+  switch (state.view) {
+    case 'pnl':    main.innerHTML = renderPnl();                           break;
+    case 'chains': main.innerHTML = renderChains();                        break;
+    case 'trades': main.innerHTML = renderAllTrades();                     break;
+    case 'ticker': main.innerHTML = renderTickerDetail(state.selectedTicker); break;
+  }
+}
+
+// ── P&L View ───────────────────────────────────────────────────
+function renderPnl() {
+  const d    = state.data;
+  const mode = state.pnlMode;
+  const rows = mode === 'weekly' ? (d.weekly || []) : (d.monthly || []);
+  const txs  = d.txs || [];
+
+  const lastWeek  = d.weekly  && d.weekly.length  ? d.weekly[d.weekly.length - 1]  : null;
+  const lastMonth = d.monthly && d.monthly.length ? d.monthly[d.monthly.length - 1] : null;
+
+  // ROI helpers
+  const fmtPct = (pnl, committed) => committed > 0 ? ((pnl / committed) * 100).toFixed(1) + '%' : '—';
+  const fmtK = v => v >= 1000 ? '$' + (v / 1000).toFixed(1) + 'k' : '$' + v.toLocaleString();
+  const ytdRoi  = fmtPct(d.ytd, d.ytdCommitted);
+  const totalRoi = fmtPct(d.totalPnl, d.totalCommitted);
+  const lwRoi = lastWeek ? fmtPct(lastWeek.pnl, lastWeek.committed) : '—';
+  const lmRoi = lastMonth ? fmtPct(lastMonth.pnl, lastMonth.committed) : '—';
+
+  // Build period → ticker → [txs] map for the expandable drill-down
+  const periodMap = {};
+  txs.forEach(tx => {
+    const a = (tx.action || '').toLowerCase().trim();
+    if ((a === 'buy' || a === 'sell') && !tx.optionType) return; // skip stock
+    const d2 = new Date(Number(tx.date));
+    let key;
+    if (mode === 'weekly') {
+      const day = d2.getUTCDay();
+      const ws  = new Date(d2);
+      ws.setUTCDate(d2.getUTCDate() - day + (day === 0 ? -6 : 1));
+      ws.setUTCHours(0, 0, 0, 0);
+      key = ws.getUTCFullYear() + '-' + String(ws.getUTCMonth()+1).padStart(2,'0') + '-' + String(ws.getUTCDate()).padStart(2,'0');
+    } else {
+      key = d2.getUTCFullYear() + '-' + String(d2.getUTCMonth()+1).padStart(2,'0');
+    }
+    const ticker = tx.underlying || 'UNKNOWN';
+    if (!periodMap[key]) periodMap[key] = {};
+    if (!periodMap[key][ticker]) periodMap[key][ticker] = [];
+    periodMap[key][ticker].push(tx);
+  });
+
+  // Pre-compute running totals in chronological order (oldest → newest)
+  let runAcc = 0;
+  const runningTotals = {};
+  rows.forEach(r => { runAcc += r.pnl; runningTotals[r.period] = runAcc; });
+
+  // Build two-level expandable rows: period → ticker subtotals → transactions
+  const tableRows = [...rows].reverse().map(r => {
+    const running = runningTotals[r.period];
+    const pnlC = r.pnl >= 0 ? 'pos' : 'neg';
+    const runC = running >= 0 ? 'pos' : 'neg';
+    const safeP = r.period.replace(/[^a-zA-Z0-9]/g, '_');
+    const detail = periodMap[r.period] || {};
+    const tickers = Object.keys(detail).sort();
+
+    // Level 2: per-ticker subtotals with committed + P&L + ROI aligned to table columns
+    const tickerBlocks = tickers.map(ticker => {
+      const tickerTxs = detail[ticker];
+      const tickerTotal = tickerTxs.reduce((s, t) => s + (t.amount || 0), 0);
+      const tC = tickerTotal >= 0 ? 'pos' : 'neg';
+      const safePT = safeP + '_' + ticker.replace(/[^a-zA-Z0-9]/g, '_');
+
+      // Per-ticker committed capital (STO PUTs only)
+      const tickerCommitted = tickerTxs.reduce((s, t) => {
+        const a = (t.action || '').toLowerCase();
+        if (a.indexOf('sell to open') !== -1 && (t.optionType || '') === 'PUT') {
+          return s + (t.strike || 0) * (t.quantity || 1) * 100;
+        }
+        return s;
+      }, 0);
+      const tickerRoi = tickerCommitted > 0 ? ((tickerTotal / tickerCommitted) * 100).toFixed(1) + '%' : '—';
+      const tickerRoiC = tickerCommitted > 0 && tickerTotal >= 0 ? 'pos' : (tickerTotal < 0 ? 'neg' : 'muted');
+
+      const txLines = [...tickerTxs].sort((a, b) => (b.date || 0) - (a.date || 0)).map(tx => {
+        const amt = tx.amount || 0;
+        const a = (tx.action || '').toLowerCase();
+        const isSTO = a.indexOf('sell to open') !== -1 && (tx.optionType || '') === 'PUT';
+        const txCom = isSTO ? (tx.strike || 0) * (tx.quantity || 1) * 100 : 0;
+        return `<div class="pnl-tx-row" style="font-size:12px;">
+          <span style="padding-left:24px;">
+            <span class="mono muted" style="font-size:11px;">${fmtDate(tx.date)}</span>
+            ${actionTag(tx.action)}
+          </span>
+          <span class="mono muted" style="font-size:11px;">${txCom > 0 ? fmtK(txCom) : ''}</span>
+          <span class="mono ${amt >= 0 ? 'pos' : 'neg'}">${fmt(amt)}</span>
+          <span></span>
+          <span class="mono muted" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${tx.symbol || ''}</span>
+        </div>`;
+      }).join('');
+
+      return `
+        <div class="pnl-ticker-row" onclick="toggleTickerDetail('${safePT}')">
+          <span>
+            <span class="pnl-chevron" id="ptchev-${safePT}">▸</span>
+            <span class="ticker-link" onclick="event.stopPropagation();openTicker('${ticker}')" style="font-size:13px;">${ticker}</span>
+          </span>
+          <span class="mono muted">${tickerCommitted > 0 ? fmtK(tickerCommitted) : '—'}</span>
+          <span class="mono ${tC}">${fmt(tickerTotal)}</span>
+          <span class="mono ${tickerRoiC}">${tickerRoi}</span>
+          <span></span>
+        </div>
+        <div class="pnl-ticker-detail" id="ptdet-${safePT}">
+          ${txLines}
+        </div>`;
+    }).join('');
+
+    const roiVal = r.committed > 0 ? ((r.pnl / r.committed) * 100).toFixed(1) + '%' : '—';
+    const roiC = r.committed > 0 && r.pnl >= 0 ? 'pos' : (r.pnl < 0 ? 'neg' : 'muted');
+
+    return `
+      <tr class="pnl-period-row" onclick="togglePeriod('${safeP}')">
+        <td><span class="pnl-chevron" id="pchev-${safeP}">▸</span> <span class="mono">${r.period}</span></td>
+        <td class="mono muted">${r.committed > 0 ? fmtK(r.committed) : '—'}</td>
+        <td class="mono ${pnlC}">${fmt(r.pnl)}</td>
+        <td class="mono ${roiC}">${roiVal}</td>
+        <td class="mono ${runC}">${fmt(running)}</td>
+      </tr>
+      <tr class="pnl-detail-row" id="pdet-${safeP}">
+        <td colspan="5" style="padding:0;">
+          <div class="pnl-ticker-list">${tickerBlocks}</div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <div class="page-header">
+      <div>
+        <div class="page-title">P&amp;L</div>
+        <div class="page-subtitle">${d.txs ? d.txs.length : 0} transactions</div>
+      </div>
+    </div>
+
+    <div class="kpi-row" style="grid-template-columns: repeat(3, 1fr);">
+      <div class="kpi blue">
+        <div class="kpi-label">Last Week</div>
+        <div class="kpi-value ${lastWeek && lastWeek.pnl >= 0 ? 'pos' : 'neg'}">${lastWeek ? fmt(lastWeek.pnl) : '—'}</div>
+        <div class="kpi-sub">${lastWeek ? 'Committed ' + fmtK(lastWeek.committed) + ' · ROI ' + lwRoi : 'No data'}</div>
+      </div>
+      <div class="kpi blue">
+        <div class="kpi-label">Last Month</div>
+        <div class="kpi-value ${lastMonth && lastMonth.pnl >= 0 ? 'pos' : 'neg'}">${lastMonth ? fmt(lastMonth.pnl) : '—'}</div>
+        <div class="kpi-sub">${lastMonth ? 'Committed ' + fmtK(lastMonth.committed) + ' · ROI ' + lmRoi : 'No data'}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">YTD</div>
+        <div class="kpi-value ${d.ytd >= 0 ? 'pos' : 'neg'}">${fmt(d.ytd)}</div>
+        <div class="kpi-sub">Committed ${fmtK(d.ytdCommitted || 0)} · ROI ${ytdRoi}</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">${mode === 'weekly' ? 'Weekly' : 'Monthly'} Breakdown</div>
+        <div class="toggle-group">
+          <button class="toggle-btn ${mode === 'weekly' ? 'active' : ''}" onclick="setPnlMode('weekly')">Weekly</button>
+          <button class="toggle-btn ${mode === 'monthly' ? 'active' : ''}" onclick="setPnlMode('monthly')">Monthly</button>
+        </div>
+      </div>
+      <div class="card-body">
+        ${rows.length ? `
+        <table class="pnl-main-table">
+          <thead><tr>
+            <th>${mode === 'weekly' ? 'Week' : 'Month'}</th>
+            <th>Committed</th>
+            <th>P&amp;L</th>
+            <th>ROI%</th>
+            <th>Running Total</th>
+          </tr></thead>
+          <tbody>${tableRows}</tbody>
+        </table>` : `<div class="empty-state" style="padding:30px;"><div class="empty-sub">No data yet.</div></div>`}
+      </div>
+    </div>`;
+}
+
+function setPnlMode(mode) {
+  state.pnlMode = mode;
+  render();
+}
+
+function togglePeriod(safeP) {
+  const el   = document.getElementById('pdet-' + safeP);
+  const chev = document.getElementById('pchev-' + safeP);
+  if (!el) return;
+  const open = el.classList.toggle('open');
+  if (chev) chev.textContent = open ? '▾' : '▸';
+}
+
+function toggleTickerDetail(safePT) {
+  const el   = document.getElementById('ptdet-' + safePT);
+  const chev = document.getElementById('ptchev-' + safePT);
+  if (!el) return;
+  const open = el.classList.toggle('open');
+  if (chev) chev.textContent = open ? '▾' : '▸';
+}
+
+// ── Chain History View ──────────────────────────────────────────
+function renderChains() {
+  const chains = state.data.chains || [];
+  if (!chains.length) return `
+    <div class="page-header"><div class="page-title">Chains</div></div>
+    <div class="empty-state">
+      <div class="empty-icon">⛓</div>
+      <div class="empty-title">No chains yet</div>
+      <div class="empty-sub">Import trades to see position chains.</div>
+    </div>`;
+
+  const isOpenStatus = s => s === 'OPEN' || s === 'ASSIGNED';
+  const openChains   = chains.filter(c => isOpenStatus(c.status));
+  const closedChains = chains.filter(c => !isOpenStatus(c.status));
+  const totalPnl     = chains.reduce((s, c) => s + c.netPnl, 0);
+  const today        = Date.now();
+
+  // Build ticker-grouped section
+  function buildSection(sectionChains, sectionPrefix) {
+    const grouped = {};
+    sectionChains.forEach(ch => {
+      if (!grouped[ch.ticker]) grouped[ch.ticker] = [];
+      grouped[ch.ticker].push(ch);
+    });
+
+    return Object.keys(grouped).sort().map(ticker => {
+      const tickerChains = grouped[ticker];
+      const tickerPnl = tickerChains.reduce((s, c) => s + c.netPnl, 0);
+      const tickerPnlC = tickerPnl >= 0 ? 'pos' : 'neg';
+      const safeTicker = sectionPrefix + '_' + ticker.replace(/[^a-zA-Z0-9]/g, '_');
+
+      // Cost basis for open assignments
+      const cbData = computeTickerCostBasis(tickerChains);
+
+      let tickerMeta = '';
+      if (cbData && cbData.chainCount >= 2) {
+        tickerMeta = `<span class="ticker-cb-inline">Combined CB <strong>$${cbData.perShare.toFixed(2)}/sh</strong> · ${cbData.shares} sh</span>`;
+      } else if (cbData) {
+        tickerMeta = `<span class="ticker-cb-inline">CB <strong>$${cbData.breakdown[0].costBasis.toFixed(2)}/sh</strong> · ${cbData.breakdown[0].shares} sh</span>`;
+      }
+
+      // Chain detail rows (hidden by default)
+      const chainRows = tickerChains.map(ch => {
+        const safeId = ch.chainId.replace(/[^a-zA-Z0-9_]/g, '_');
+        const pnlC = ch.netPnl >= 0 ? 'pos' : 'neg';
+        const chIsOpen = isOpenStatus(ch.status);
+
+        let daysLeftHtml = '';
+        if (chIsOpen && ch.currentExpiry) {
+          const expiryTs = parseExpiryDate(ch.currentExpiry);
+          if (expiryTs) {
+            const daysLeft = Math.max(0, Math.round((expiryTs - today) / 86400000));
+            daysLeftHtml = `<span class="mono ${daysLeft <= 5 ? 'neg' : 'muted'}" style="font-size:11px;"> · ${daysLeft}d</span>`;
+          }
+        }
+
+        const assignedLeg = ch.legs.find(l => l.chainType === 'assigned');
+        const strikeLabel = assignedLeg ? `Assigned $${assignedLeg.strike}` : (ch.legs[0] ? `$${ch.legs[0].strike}` : '—');
+        let cbHtml = '';
+        if (ch.costBasis !== null && ch.costBasis !== undefined) {
+          cbHtml = `<span class="cost-basis-badge">CB $${ch.costBasis.toFixed(2)}/sh</span>`;
+        }
+        const dateRange = chIsOpen
+          ? fmtDate(ch.openDate) + ' → open'
+          : fmtDate(ch.openDate) + ' → ' + fmtDate(ch.closeDate);
+        const wheelHtml = ch.wheelSummary ? renderWheelSummary(ch.wheelSummary) : '';
+
+        return `
+          <tr class="chain-summary-row" onclick="toggleChain('${safeId}')" style="background:rgba(0,0,0,0.15);">
+            <td style="padding-left:32px;">
+              <span class="tag" style="background:rgba(148,163,184,0.1);color:var(--text2);">×${ch.contracts}</span>
+              <span class="mono" style="font-size:11px;margin-left:6px;color:var(--text2);">${strikeLabel}</span>
+              ${cbHtml}
+            </td>
+            <td>${statusTag(ch.status)}</td>
+            <td class="mono muted" style="font-size:11px;">${dateRange}${daysLeftHtml}</td>
+            <td class="mono muted">${ch.committedCapital > 0 ? '$' + ch.committedCapital.toLocaleString() : '—'}</td>
+            <td class="mono ${pnlC}">${fmt(ch.netPnl)}</td>
+            <td class="mono muted">${ch.roiPct.toFixed(1)}%</td>
+          </tr>
+          <tr id="legs-${safeId}" class="chain-legs-row">
+            <td colspan="6" style="padding:0;">
+              <div class="chain-legs-inner">
+                ${renderLegs([...ch.legs].reverse())}
+                ${wheelHtml}
+              </div>
+            </td>
+          </tr>`;
+      }).join('');
+
+      return `
+        <tr class="ticker-header-row" style="cursor:pointer;" onclick="toggleTickerChains('${safeTicker}')">
+          <td colspan="3" style="padding:10px 14px;">
+            <span class="pnl-chevron" id="tchev-${safeTicker}">▸</span>
+            <span class="ticker-link" onclick="event.stopPropagation();openTicker('${ticker}')" style="margin-left:4px;">${ticker}</span>
+            ${tickerMeta}
+          </td>
+          <td class="mono muted">${tickerChains.reduce((s,c) => s + c.committedCapital, 0) > 0 ? '$' + tickerChains.reduce((s,c) => s + c.committedCapital, 0).toLocaleString() : '—'}</td>
+          <td class="mono ${tickerPnlC}">${fmt(tickerPnl)}</td>
+          <td class="mono muted">${tickerChains.length} chain${tickerChains.length > 1 ? 's' : ''}</td>
+        </tr>
+        <tr id="ticker-chains-${safeTicker}" class="chain-legs-row">
+          <td colspan="6" style="padding:0;">
+            <table style="width:100%;border-collapse:collapse;">
+              <tbody>${chainRows}</tbody>
+            </table>
+          </td>
+        </tr>`;
+    }).join('');
+  }
+
+  const openRows   = buildSection(openChains, 'open');
+  const closedRows = buildSection(closedChains, 'closed');
+
+  const tableHead = `<thead><tr>
+    <th>Ticker</th><th>Status</th><th>Dates</th>
+    <th>Committed</th><th>Net P&amp;L</th><th>ROI%</th>
+  </tr></thead>`;
+
+  return `
+    <div class="page-header">
+      <div>
+        <div class="page-title">Chains</div>
+        <div class="page-subtitle">${openChains.length} open · ${closedChains.length} closed · Total P&amp;L: <span class="${totalPnl >= 0 ? 'pos' : 'neg'}">${fmt(totalPnl)}</span></div>
+      </div>
+    </div>
+
+    ${openChains.length ? `
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <div class="card-title">Open Positions</div>
+        <span style="font-size:11px;color:var(--text2);">click ticker to expand</span>
+      </div>
+      <div class="card-body card-body-scroll">
+        <table>${tableHead}<tbody>${openRows}</tbody></table>
+      </div>
+    </div>` : ''}
+
+    ${closedChains.length ? `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">Closed Positions</div>
+        <span style="font-size:11px;color:var(--text2);">click ticker to expand</span>
+      </div>
+      <div class="card-body card-body-scroll">
+        <table>${tableHead}<tbody>${closedRows}</tbody></table>
+      </div>
+    </div>` : ''}`;
+}
+
+function toggleTickerChains(safeTicker) {
+  const el   = document.getElementById('ticker-chains-' + safeTicker);
+  const chev = document.getElementById('tchev-' + safeTicker);
+  if (!el) return;
+  const open = el.classList.toggle('open');
+  if (chev) chev.textContent = open ? '▾' : '▸';
+}
+
+function renderLegs(legs) {
+  if (!legs || !legs.length) return '';
+  return legs.map(leg => {
+    const amtC = (leg.amount || 0) >= 0 ? 'pos' : 'neg';
+    const lt = leg.chainType || '';
+    let detail = '';
+    if (lt === 'open' || lt === 'roll_open' || lt === 'call_open') {
+      detail = `Strike $${leg.strike} · Exp ${leg.expiry} · ×${leg.quantity}`;
+    } else if (lt === 'roll_close' || lt === 'call_close') {
+      detail = `Closed · Strike $${leg.strike} · ×${leg.quantity}`;
+    } else if (lt === 'expired') {
+      detail = 'Expired worthless — premium confirmed';
+    } else if (lt === 'call_expired') {
+      detail = `Call expired worthless at $${leg.strike} — premium kept`;
+    } else if (lt === 'assigned') {
+      detail = `Assigned at $${leg.strike} · ${leg.quantity * 100} shares`;
+    } else if (lt === 'call_assigned') {
+      detail = `Shares called away at $${leg.strike} · ${leg.quantity * 100} shares`;
+    }
+    return `<div class="leg-row">
+      <span class="mono muted" style="font-size:11px;">${fmtDate(leg.date)}</span>
+      ${legTypeTag(lt)}
+      <span class="muted" style="font-size:11px;">${detail}</span>
+      <span class="mono ${amtC}" style="text-align:right;">${leg.amount ? fmt(leg.amount) : '—'}</span>
+    </div>`;
+  }).join('');
+}
+
+function renderWheelSummary(ws) {
+  if (!ws) return '';
+  const totalC = ws.totalReturn >= 0 ? 'pos' : 'neg';
+  const eqC    = ws.equityGainLoss >= 0 ? 'pos' : 'neg';
+  return `
+    <div class="wheel-summary">
+      <div class="wheel-summary-title">Complete Wheel Return</div>
+      <div class="wheel-summary-grid">
+        <div class="wheel-summary-item">
+          <div class="wheel-summary-label">Total Premium</div>
+          <div class="wheel-summary-value pos">${fmt(ws.totalPremium)}</div>
+        </div>
+        <div class="wheel-summary-item">
+          <div class="wheel-summary-label">Equity Gain/Loss</div>
+          <div class="wheel-summary-value ${eqC}">${fmt(ws.equityGainLoss)}</div>
+        </div>
+        <div class="wheel-summary-item">
+          <div class="wheel-summary-label">Total Return</div>
+          <div class="wheel-summary-value ${totalC}">${fmt(ws.totalReturn)}</div>
+        </div>
+      </div>
+      <div class="wheel-summary-detail">
+        <div class="wheel-detail-row">
+          <span class="wheel-detail-label">Put premiums</span>
+          <span class="wheel-detail-value pos">${fmt(ws.putPremium)}</span>
+        </div>
+        <div class="wheel-detail-row">
+          <span class="wheel-detail-label">Call premiums</span>
+          <span class="wheel-detail-value pos">${fmt(ws.callPremium)}</span>
+        </div>
+        <div class="wheel-detail-row">
+          <span class="wheel-detail-label">Bought at</span>
+          <span class="wheel-detail-value">$${ws.putStrike.toFixed(2)} (${ws.shares} sh)</span>
+        </div>
+        <div class="wheel-detail-row">
+          <span class="wheel-detail-label">Sold at</span>
+          <span class="wheel-detail-value">$${ws.callStrike.toFixed(2)} (${ws.shares} sh)</span>
+        </div>
+        <div class="wheel-detail-row">
+          <span class="wheel-detail-label">Capital deployed</span>
+          <span class="wheel-detail-value">$${ws.capitalDeployed.toLocaleString()}</span>
+        </div>
+        <div class="wheel-detail-row">
+          <span class="wheel-detail-label">ROI</span>
+          <span class="wheel-detail-value ${totalC}">${ws.roiPct.toFixed(2)}%</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleChain(safeId) {
+  const el = document.getElementById('legs-' + safeId);
+  if (el) el.classList.toggle('open');
+}
+
+// ── Cost basis data for all assigned chains of a ticker ────────
+// Returns null if no assigned chains.
+// Always returns full per-chain breakdown + combined total:
+//   { perShare, shares, chainCount, breakdown: [{putStrike, contracts, shares, costBasis, premiums}] }
+function computeTickerCostBasis(chains) {
+  // Only include chains still holding shares (ASSIGNED), not COMPLETED
+  const assignedChains = chains.filter(ch =>
+    ch.status === 'ASSIGNED' && ch.costBasis !== null && ch.costBasis !== undefined);
+  if (!assignedChains.length) return null;
+
+  let totalAssignmentCost = 0, totalShares = 0;
+  let totalPutIn = 0, totalPutOut = 0, totalCallIn = 0, totalCallOut = 0;
+  const breakdown = [];
+
+  assignedChains.forEach(ch => {
+    let aCost = 0, aShares = 0, putIn = 0, putOut = 0, callIn = 0, callOut = 0;
+    let putStrike = 0;
+
+    ch.legs.forEach(leg => {
+      const lt = leg.chainType || '';
+      if (lt === 'assigned') {
+        aCost   += (leg.strike || 0) * (leg.quantity || 0) * 100;
+        aShares += (leg.quantity || 0) * 100;
+        if (!putStrike) putStrike = leg.strike || 0;
+      } else if (lt === 'open' || lt === 'roll_open') {
+        putIn  += Math.abs(leg.amount || 0);
+      } else if (lt === 'roll_close') {
+        putOut += Math.abs(leg.amount || 0);
+      } else if (lt === 'call_open') {
+        callIn  += Math.abs(leg.amount || 0);
+      } else if (lt === 'call_close') {
+        callOut += Math.abs(leg.amount || 0);
+      }
+    });
+
+    // If putStrike wasn't on the assigned leg, fall back to the open leg
+    if (!putStrike) {
+      const openLeg = ch.legs.find(l => l.chainType === 'open' || l.chainType === 'roll_open');
+      if (openLeg) putStrike = openLeg.strike || 0;
+    }
+
+    const premiums = putIn - putOut + callIn - callOut;
+    breakdown.push({
+      putStrike,
+      contracts: ch.contracts,
+      shares:    aShares,
+      costBasis: ch.costBasis,
+      premiums,
+      chainId:   ch.chainId
+    });
+
+    totalAssignmentCost += aCost;
+    totalShares         += aShares;
+    totalPutIn  += putIn;  totalPutOut  += putOut;
+    totalCallIn += callIn; totalCallOut += callOut;
+  });
+
+  if (!totalShares) return null;
+  const perShare = (totalAssignmentCost - totalPutIn + totalPutOut - totalCallIn + totalCallOut) / totalShares;
+  return {
+    perShare,
+    shares:     totalShares,
+    chainCount: assignedChains.length,
+    totalPremiums: totalPutIn - totalPutOut + totalCallIn - totalCallOut,
+    breakdown
+  };
+}
+
+// ── Per-Ticker Detail View ─────────────────────────────────────
+function renderTickerDetail(ticker) {
+  const chains = (state.data.chains || []).filter(c => c.ticker === ticker);
+  const txs = (state.data.txs || []).filter(t => t.underlying === ticker);
+  const today = Date.now();
+
+  const totalPnl = chains.reduce((s, c) => s + c.netPnl, 0);
+  const openChains = chains.filter(c => c.status === 'OPEN' || c.status === 'ASSIGNED');
+
+  const cbData = computeTickerCostBasis(chains);
+
+  let costBasisBlock = '';
+  if (cbData) {
+    const isMulti = cbData.chainCount >= 2;
+
+    // Per-assignment rows
+    const breakdownRows = cbData.breakdown.map(b => `
+      <tr class="cb-breakdown-row">
+        <td class="mono">$${b.putStrike.toFixed(2)} put</td>
+        <td class="mono">${b.contracts} contracts</td>
+        <td class="mono">${b.shares} shares</td>
+        <td class="mono pos"><strong>$${b.costBasis.toFixed(2)}/sh</strong></td>
+        <td class="mono pos">${fmt(b.premiums)}</td>
+      </tr>`).join('');
+
+    // Combined total row (only shown when multiple assignments)
+    const combinedRow = isMulti ? `
+      <tr class="cb-total-row">
+        <td class="mono" style="color:var(--text2);font-size:11px;text-transform:uppercase;letter-spacing:.5px;">Combined</td>
+        <td class="mono">—</td>
+        <td class="mono">${cbData.shares} shares</td>
+        <td class="mono accent"><strong>$${cbData.perShare.toFixed(2)}/sh</strong></td>
+        <td class="mono pos">${fmt(cbData.totalPremiums)}</td>
+      </tr>` : '';
+
+    costBasisBlock = `
+      <div class="ticker-cb-block">
+        <div class="ticker-cb-title">
+          ${cbData.chainCount} Open Assignment${cbData.chainCount > 1 ? 's' : ''} · Cost Basis Breakdown
+        </div>
+        <table class="cb-breakdown-table">
+          <thead>
+            <tr>
+              <th>Assignment</th><th>Contracts</th><th>Shares</th>
+              <th>Cost Basis</th><th>Premiums Collected</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${breakdownRows}
+            ${combinedRow}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  // Build wheel summary blocks for completed chains
+  const completedChains = chains.filter(c => c.wheelSummary);
+  let wheelSummaryBlocks = '';
+  if (completedChains.length) {
+    wheelSummaryBlocks = completedChains.map(ch => {
+      const ws = ch.wheelSummary;
+      const totalC = ws.totalReturn >= 0 ? 'pos' : 'neg';
+      const eqC = ws.equityGainLoss >= 0 ? 'pos' : 'neg';
+      const days = ch.days || 0;
+      const openDateStr = fmtDate(ch.openDate);
+      const closeDateStr = fmtDate(ch.closeDate);
+
+      return `
+        <div class="ticker-cb-block" style="border-color:rgba(59,130,246,0.2);background:rgba(59,130,246,0.04);">
+          <div class="ticker-cb-title" style="color:var(--accent2);">Completed Wheel · $${ws.putStrike} Put → $${ws.callStrike} Call</div>
+          <table class="cb-breakdown-table">
+            <thead><tr><th>Component</th><th style="text-align:right;">Amount</th></tr></thead>
+            <tbody>
+              <tr class="cb-breakdown-row"><td>Put premiums (net of rolls)</td><td class="mono pos" style="text-align:right;">${fmt(ws.putPremium)}</td></tr>
+              <tr class="cb-breakdown-row"><td>Covered call premiums</td><td class="mono pos" style="text-align:right;">${fmt(ws.callPremium)}</td></tr>
+              <tr class="cb-breakdown-row" style="border-top:1px solid rgba(59,130,246,0.15);"><td style="font-weight:600;">Total premium collected</td><td class="mono pos" style="text-align:right;font-weight:600;">${fmt(ws.totalPremium)}</td></tr>
+              <tr class="cb-breakdown-row"><td>Bought shares @ $${ws.putStrike.toFixed(2)}</td><td class="mono neg" style="text-align:right;">${fmt(-ws.capitalDeployed)}</td></tr>
+              <tr class="cb-breakdown-row"><td>Sold shares @ $${ws.callStrike.toFixed(2)}</td><td class="mono pos" style="text-align:right;">${fmt(ws.callStrike * ws.shares)}</td></tr>
+              <tr class="cb-breakdown-row" style="border-top:1px solid rgba(59,130,246,0.15);"><td style="font-weight:600;">Equity gain/loss</td><td class="mono ${eqC}" style="text-align:right;font-weight:600;">${fmt(ws.equityGainLoss)}</td></tr>
+              <tr class="cb-total-row" style="border-top:2px solid rgba(59,130,246,0.3);"><td style="font-weight:700;color:var(--text);">Total profit (premium + equity)</td><td class="mono ${totalC}" style="text-align:right;font-weight:700;font-size:15px;">${fmt(ws.totalReturn)}</td></tr>
+              <tr class="cb-breakdown-row"><td class="muted">Capital deployed</td><td class="mono muted" style="text-align:right;">$${ws.capitalDeployed.toLocaleString()}</td></tr>
+              <tr class="cb-breakdown-row"><td class="muted">Return on capital</td><td class="mono ${totalC}" style="text-align:right;">${ws.roiPct.toFixed(1)}%</td></tr>
+              <tr class="cb-breakdown-row"><td class="muted">Time period</td><td class="mono muted" style="text-align:right;">${days} days (${openDateStr} → ${closeDateStr})</td></tr>
+            </tbody>
+          </table>
+        </div>`;
+    }).join('');
+  }
+
+  // Build chain rows (same format as main chains view)
+  let chainRows = '';
+  chains.forEach(ch => {
+    const safeId = ('ticker_' + ch.chainId).replace(/[^a-zA-Z0-9_]/g, '_');
+    const pnlC = ch.netPnl >= 0 ? 'pos' : 'neg';
+    const isOpen = ch.status === 'OPEN' || ch.status === 'ASSIGNED';
+
+    let daysLeftHtml = '';
+    if (isOpen && ch.currentExpiry) {
+      const expiryTs = parseExpiryDate(ch.currentExpiry);
+      if (expiryTs) {
+        const daysLeft = Math.max(0, Math.round((expiryTs - today) / 86400000));
+        const dlC = daysLeft <= 5 ? 'neg' : 'muted';
+        daysLeftHtml = `<span class="mono ${dlC}" style="font-size:11px;"> · ${daysLeft}d left</span>`;
+      }
+    }
+
+    const aLeg = ch.legs.find(l => l.chainType === 'assigned');
+    const sLabel = aLeg ? `Assigned $${aLeg.strike}` : (ch.legs[0] ? `$${ch.legs[0].strike}` : '—');
+
+    let cbHtml = '';
+    if (ch.costBasis !== null && ch.costBasis !== undefined) {
+      cbHtml = `<span class="cost-basis-badge" style="margin-left:6px;">CB $${ch.costBasis.toFixed(2)}/sh</span>`;
+    }
+
+    const dateRange = isOpen
+      ? fmtDate(ch.openDate) + ' → open'
+      : fmtDate(ch.openDate) + ' → ' + fmtDate(ch.closeDate);
+
+    const wheelHtml2 = ch.wheelSummary ? renderWheelSummary(ch.wheelSummary) : '';
+
+    chainRows += `
+      <tr class="chain-summary-row" onclick="toggleChain('${safeId}')">
+        <td>
+          ${statusTag(ch.status)}
+          <span class="mono" style="margin-left:8px;font-size:11px;color:var(--text2);">${sLabel}</span>
+          ${cbHtml}
+        </td>
+        <td class="mono muted" style="font-size:11px;">${dateRange}${daysLeftHtml}</td>
+        <td class="mono muted">${ch.committedCapital > 0 ? '$' + ch.committedCapital.toLocaleString() : '—'}</td>
+        <td class="mono ${pnlC}">${fmt(ch.netPnl)}</td>
+        <td class="mono muted">${ch.roiPct.toFixed(1)}%</td>
+      </tr>
+      <tr id="legs-${safeId}" class="chain-legs-row">
+        <td colspan="5" style="padding:0;">
+          <div class="chain-legs-inner">
+            ${renderLegs([...ch.legs].reverse())}
+            ${wheelHtml2}
+          </div>
+        </td>
+      </tr>`;
+  });
+
+  // Transaction rows
+  const txRows = [...txs].reverse().map(tx => `
+    <tr>
+      <td class="mono muted">${fmtDate(tx.date)}</td>
+      <td>${actionTag(tx.action)}</td>
+      <td class="mono" style="font-size:11px;">${tx.symbol}</td>
+      <td class="mono muted">${tx.quantity}</td>
+      <td class="mono muted">${tx.price ? '$' + tx.price.toFixed(2) : '—'}</td>
+      <td class="mono ${(tx.amount||0) >= 0 ? 'pos' : 'neg'}">${tx.amount ? fmt(tx.amount) : '—'}</td>
+    </tr>`).join('');
+
+  return `
+    <div style="margin-bottom:20px;">
+      <span class="back-link" onclick="setView('chains')">← Back to Chains</span>
+    </div>
+
+    <div class="page-header">
+      <div>
+        <div class="page-title">${ticker}</div>
+        <div class="page-subtitle">${chains.length} chain(s) · ${txs.length} transactions · Total P&amp;L: <span class="${totalPnl >= 0 ? 'pos' : 'neg'}">${fmt(totalPnl)}</span></div>
+      </div>
+    </div>
+
+    ${wheelSummaryBlocks}
+    ${costBasisBlock}
+
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <div class="card-title">Position Chains</div>
+        <span style="font-size:11px;color:var(--text2);">click row to expand legs</span>
+      </div>
+      <div class="card-body card-body-scroll">
+        <table>
+          <thead><tr><th>Status</th><th>Dates</th><th>Committed</th><th>Net P&amp;L</th><th>ROI%</th></tr></thead>
+          <tbody>${chainRows}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><div class="card-title">All Transactions</div></div>
+      <div class="card-body card-body-scroll">
+        ${txs.length ? `
+        <table>
+          <thead><tr><th>Date</th><th>Action</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead>
+          <tbody>${txRows}</tbody>
+        </table>` : `<div class="empty-state" style="padding:24px;"><div class="empty-sub">No transactions.</div></div>`}
+      </div>
+    </div>`;
+}
+
+// ── All Trades ─────────────────────────────────────────────────
+function renderAllTrades() {
+  const txs = [...(state.data.txs || [])].reverse();
+  return `
+    <div class="page-header">
+      <div class="page-title">All Trades</div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        ${txs.length ? `
+        <table>
+          <thead><tr><th>Date</th><th>Ticker</th><th>Action</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Fees</th><th>Amount</th><th></th></tr></thead>
+          <tbody>
+            ${txs.map(tx => `
+            <tr>
+              <td class="mono muted">${fmtDate(tx.date)}</td>
+              <td><b>${tx.underlying || '—'}</b></td>
+              <td>${actionTag(tx.action)}</td>
+              <td class="mono" style="font-size:11px;">${tx.symbol}</td>
+              <td class="mono muted">${tx.quantity}</td>
+              <td class="mono muted">${tx.price ? '$' + tx.price.toFixed(2) : '—'}</td>
+              <td class="mono neg">${tx.fees ? '-$' + Math.abs(tx.fees).toFixed(2) : '—'}</td>
+              <td class="mono ${(tx.amount||0) >= 0 ? 'pos' : 'neg'}">${tx.amount ? fmt(tx.amount) : '—'}</td>
+              <td><button class="btn btn-danger btn-sm" onclick="deleteTrade('${tx.id}')">✕</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>` : `<div class="empty-state"><div class="empty-sub">No trades yet.</div></div>`}
+      </div>
+    </div>`;
+}
+
+// ── Bar Chart ──────────────────────────────────────────────────
+function renderBarChart(rows, period) {
+  if (!rows || !rows.length) return `<div class="empty-state" style="padding:30px;"><div class="empty-sub">No data yet.</div></div>`;
+  const max = Math.max(...rows.map(r => Math.abs(r.pnl)), 1);
+  return `<div class="bar-chart">
+    ${rows.map(r => {
+      const pct = (Math.abs(r.pnl) / max * 100).toFixed(1);
+      const label = period === 'week' ? r.period.slice(5) : r.period.slice(0, 7);
+      return `<div class="bar-row">
+        <span class="bar-label">${label}</span>
+        <div class="bar-track">
+          <div class="bar-fill ${r.pnl >= 0 ? 'pos' : 'neg'}" style="width:${pct}%;"></div>
+        </div>
+        <span class="bar-val ${r.pnl >= 0 ? 'pos' : 'neg'}">${fmt(r.pnl)}</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ── Helpers ────────────────────────────────────────────────────
+function fmt(val) {
+  if (val === null || val === undefined) return '—';
+  const abs = Math.abs(val).toFixed(2);
+  const formatted = '$' + parseFloat(abs).toLocaleString('en-US', { minimumFractionDigits: 2 });
+  return val < 0 ? '-' + formatted : '+' + formatted;
+}
+
+function fmtDate(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  return `${String(d.getUTCMonth()+1).padStart(2,'0')}/${String(d.getUTCDate()).padStart(2,'0')}/${d.getUTCFullYear()}`;
+}
+
+function parseExpiryDate(str) {
+  if (!str) return 0;
+  const p = str.split('/');
+  if (p.length !== 3) return 0;
+  return Date.UTC(parseInt(p[2]), parseInt(p[0]) - 1, parseInt(p[1]));
+}
+
+function actionTag(action) {
+  if (!action) return '';
+  const a = action.toLowerCase();
+  if (a.includes('sell to open')) return `<span class="tag tag-sell">SELL</span>`;
+  if (a.includes('buy to close')) return `<span class="tag tag-buy">BUY CLOSE</span>`;
+  if (a.includes('expired'))      return `<span class="tag tag-expired">EXPIRED</span>`;
+  if (a.includes('assigned'))     return `<span class="tag tag-assigned">ASSIGNED</span>`;
+  return `<span class="tag">${action}</span>`;
+}
+
+function legTypeTag(lt) {
+  const map = {
+    'open':          ['tag-leg-open',          'OPEN'],
+    'roll_close':    ['tag-leg-roll-close',    'ROLL ↓'],
+    'roll_open':     ['tag-leg-roll-open',     'ROLL ↑'],
+    'expired':       ['tag-leg-expired',       'EXPIRED ✓'],
+    'assigned':      ['tag-leg-assigned',       'ASSIGNED'],
+    'call_open':     ['tag-leg-call-open',      'CALL ↑'],
+    'call_close':    ['tag-leg-call-close',     'CALL ↓'],
+    'call_expired':  ['tag-leg-call-expired',   'CALL EXP ✓'],
+    'call_assigned': ['tag-leg-call-assigned',  'CALLED AWAY']
+  };
+  const [cls, label] = map[lt] || ['tag', lt];
+  return `<span class="tag ${cls}">${label}</span>`;
+}
+
+function statusTag(status) {
+  const map = {
+    'OPEN':      ['tag-status-open',      'OPEN'],
+    'EXPIRED':   ['tag-status-expired',   'EXPIRED ✓'],
+    'ASSIGNED':  ['tag-status-assigned',  'ASSIGNED'],
+    'CLOSED':    ['tag-status-closed',    'CLOSED'],
+    'COMPLETED': ['tag-status-completed', 'COMPLETED ✓']
+  };
+  const [cls, label] = map[status] || ['tag', status];
+  return `<span class="tag ${cls}">${label}</span>`;
+}
+
+// ── Import ─────────────────────────────────────────────────────
+function openImport() {
+  document.getElementById('import-modal').classList.add('open');
+  document.getElementById('import-error').style.display = 'none';
+}
+
+function doImport() {
+  const json = document.getElementById('import-json').value.trim();
+  if (!json) return;
+  document.getElementById('import-error').style.display = 'none';
+  const btn = document.getElementById('import-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;display:inline-block;vertical-align:middle;margin-right:6px;"></span>Importing...';
+  google.script.run
+    .withSuccessHandler(result => {
+      btn.disabled = false;
+      btn.textContent = 'Import';
+      if (result.success) {
+        showToast(`✓ Imported ${result.added} new transactions (${result.total} total in file)`, 'success');
+        closeModals();
+        document.getElementById('import-json').value = '';
+        loadData();
+      } else {
+        document.getElementById('import-error').textContent = 'Error: ' + result.error;
+        document.getElementById('import-error').style.display = 'block';
+      }
+    })
+    .withFailureHandler(err => {
+      btn.disabled = false;
+      btn.textContent = 'Import';
+      document.getElementById('import-error').textContent = 'Error: ' + (err.message || err);
+      document.getElementById('import-error').style.display = 'block';
+    })
+    .importTransactions(json);
+}
+
+// ── Manual Add ─────────────────────────────────────────────────
+function openManual() {
+  document.getElementById('manual-modal').classList.add('open');
+  document.getElementById('m-date').value = new Date().toISOString().split('T')[0];
+}
+
+function doManualAdd() {
+  const date       = document.getElementById('m-date').value;
+  const action     = document.getElementById('m-action').value;
+  const underlying = document.getElementById('m-underlying').value.toUpperCase().trim();
+  const type       = document.getElementById('m-type').value;
+  const strike     = document.getElementById('m-strike').value;
+  const expiry     = document.getElementById('m-expiry').value;
+  const qty        = document.getElementById('m-qty').value;
+  const price      = document.getElementById('m-price').value;
+  const fees       = document.getElementById('m-fees').value;
+  const amount     = document.getElementById('m-amount').value;
+
+  if (!date || !underlying || !strike) {
+    showToast('Please fill in Date, Underlying, and Strike', 'error');
+    return;
+  }
+
+  const [y, m, day] = date.split('-');
+  const fDate = `${m}/${day}/${y}`;
+
+  let fExpiry = expiry;
+  if (expiry) {
+    const [ey, em, ed] = expiry.split('-');
+    fExpiry = `${em}/${ed}/${ey}`;
+  }
+
+  const symbol = `${underlying} ${fExpiry} ${parseFloat(strike).toFixed(2)} ${type}`;
+  const amtNum = parseFloat(amount) || 0;
+  const fmtAmt = amtNum < 0 ? `-$${Math.abs(amtNum).toFixed(2)}` : `$${amtNum.toFixed(2)}`;
+
+  const tx = {
+    Date: fDate, Action: action, Symbol: symbol,
+    Description: `${underlying} ${type === 'P' ? 'PUT' : 'CALL'} $${strike} EXP ${fExpiry}`,
+    Quantity: qty || '1',
+    Price: price ? `$${parseFloat(price).toFixed(2)}` : '',
+    'Fees & Comm': fees ? `$${parseFloat(fees).toFixed(2)}` : '',
+    Amount: fmtAmt
+  };
+
+  google.script.run
+    .withSuccessHandler(result => {
+      if (result.success) {
+        showToast('✓ Trade added', 'success');
+        closeModals();
+        loadData();
+      } else {
+        showToast('Error: ' + result.error, 'error');
+      }
+    })
+    .addManualTransaction(tx);
+}
+
+// ── Delete ─────────────────────────────────────────────────────
+function deleteTrade(id) {
+  if (!confirm('Delete this trade?')) return;
+  google.script.run
+    .withSuccessHandler(() => { showToast('Deleted', 'success'); loadData(); })
+    .deleteTransaction(id);
+}
+
+// ── Modals ─────────────────────────────────────────────────────
+function closeModals() {
+  document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('open'));
+}
+
+// ── Toast ──────────────────────────────────────────────────────
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast ${type} show`;
+  setTimeout(() => t.classList.remove('show'), 3500);
+}
+</script>
+</body>
+</html>
