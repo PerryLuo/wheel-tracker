@@ -52,12 +52,16 @@ function splitCsvLine(line: string): string[] {
   return result;
 }
 
-// Strip currency formatting: "$1,234.56" → 1234.56, "-$1,234.56" → -1234.56
+// Strip currency formatting: "$1,234.56" → 1234.56, "-$1,234.56" → -1234.56, "($620.80)" → -620.80
 export function parseCurrency(raw: string): number {
   if (!raw || raw.trim() === "") return 0;
-  const cleaned = raw.replace(/[$,\s]/g, "");
+  const trimmed = raw.trim();
+  const isNegParens = trimmed.startsWith("(") && trimmed.endsWith(")");
+  const inner = isNegParens ? trimmed.slice(1, -1) : trimmed;
+  const cleaned = inner.replace(/[$,\s]/g, "");
   const val = parseFloat(cleaned);
-  return isNaN(val) ? 0 : val;
+  if (isNaN(val)) return 0;
+  return isNegParens ? -val : val;
 }
 
 // Normalize a quantity string: "3" → 3, "" → 0

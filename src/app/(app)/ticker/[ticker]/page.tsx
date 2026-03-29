@@ -1,8 +1,9 @@
 "use client";
 
-import { use } from "react";
+import { use, Suspense } from "react";
 import Link from "next/link";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useBrokerFilter } from "@/hooks/useBrokerFilter";
 import type { Chain, Leg } from "@/lib/types";
 import { StatusBadge, LegTypeBadge } from "@/components/ui/Badges";
 
@@ -408,9 +409,10 @@ function TransactionsTable({ legs }: { legs: Leg[] }) {
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
-export default function TickerPage({ params }: { params: Promise<{ ticker: string }> }) {
+function TickerPageInner({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = use(params);
-  const { data, loading, error } = useTransactions();
+  const broker = useBrokerFilter();
+  const { data, loading, error } = useTransactions(broker);
 
   if (loading) {
     return (
@@ -544,5 +546,13 @@ export default function TickerPage({ params }: { params: Promise<{ ticker: strin
       <ChainsTable chains={chains} />
       <TransactionsTable legs={allLegs} />
     </div>
+  );
+}
+
+export default function TickerPage({ params }: { params: Promise<{ ticker: string }> }) {
+  return (
+    <Suspense>
+      <TickerPageInner params={params} />
+    </Suspense>
   );
 }

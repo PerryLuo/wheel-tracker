@@ -81,7 +81,7 @@ Fonts: **DM Mono** (code/numbers) + **DM Sans** (UI text)
 | **3** | Chains view (`/chains`): KPI cards, ChainTable with ticker grouping + combined CB, ticker detail page (`/ticker/[ticker]`) | Complete |
 | **4** | P&L landing page (`/`): KPI cards (Last Week/Month/YTD), two-level expandable weekly/monthly breakdown, roll detection, YTD stats | Complete |
 | **5** | Auth + multi-user (Supabase Google OAuth + RLS policies) | Complete |
-| 6 | Robinhood parser (needs real CSV export to confirm column names) | Pending |
+| **6** | Robinhood CSV parser, split fill aggregation, broker filter UI | Complete |
 | 7 | Polish + production (responsive layout, E2E tests, Vercel deploy) | Pending |
 
 ## App Routes

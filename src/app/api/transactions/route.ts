@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSupabase } from "@/lib/supabase-server";
 import { buildAllChains } from "@/lib/chains";
 import { computeChainCostBasis, computeWheelSummary } from "@/lib/costBasis";
@@ -25,7 +25,7 @@ function rowToTransaction(row: Record<string, unknown>): Transaction {
   };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const supabase = await getServerSupabase();
 
@@ -34,10 +34,18 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data, error } = await supabase
+    const brokerFilter = req.nextUrl.searchParams.get("broker");
+
+    let query = supabase
       .from("transactions")
       .select("*")
       .order("date", { ascending: true });
+
+    if (brokerFilter) {
+      query = query.eq("broker", brokerFilter);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 

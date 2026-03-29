@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, Suspense } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import ImportModal from "./ImportModal";
 
@@ -11,11 +11,30 @@ const links = [
   { href: "/chains", label: "Chains" },
 ];
 
-export default function Nav() {
+const BROKERS = [
+  { value: "",           label: "All" },
+  { value: "schwab",     label: "Schwab" },
+  { value: "robinhood",  label: "Robinhood" },
+];
+
+function NavInner() {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showImport, setShowImport] = useState(false);
   const [userName, setUserName] = useState("");
+  const activeBroker = searchParams.get("broker") ?? "";
+
+  function setBroker(value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) {
+      params.set("broker", value);
+    } else {
+      params.delete("broker");
+    }
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
+  }
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -72,6 +91,26 @@ export default function Nav() {
             })}
           </div>
           <div className="flex items-center gap-3">
+            {/* Broker filter pills */}
+            <div
+              className="flex rounded overflow-hidden text-xs font-medium"
+              style={{ border: "1px solid #1e2d3d" }}
+            >
+              {BROKERS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setBroker(value)}
+                  className="px-3 py-1 transition-colors"
+                  style={{
+                    backgroundColor: activeBroker === value ? "#00d4aa22" : "transparent",
+                    color: activeBroker === value ? "#00d4aa" : "#4b6080",
+                    borderRight: value !== "robinhood" ? "1px solid #1e2d3d" : undefined,
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => setShowImport(true)}
               className="px-4 py-1.5 rounded text-sm font-medium transition-opacity hover:opacity-80"
@@ -106,5 +145,13 @@ export default function Nav() {
         />
       )}
     </>
+  );
+}
+
+export default function Nav() {
+  return (
+    <Suspense>
+      <NavInner />
+    </Suspense>
   );
 }

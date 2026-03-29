@@ -13,7 +13,7 @@ export interface AppData {
   ytdCommitted: number;
 }
 
-export function useTransactions() {
+export function useTransactions(broker?: string) {
   const [data, setData] = useState<AppData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -22,7 +22,10 @@ export function useTransactions() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/transactions");
+      const url = broker
+        ? `/api/transactions?broker=${encodeURIComponent(broker)}`
+        : "/api/transactions";
+      const res = await fetch(url);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Failed to load");
       setData(json);
@@ -31,7 +34,7 @@ export function useTransactions() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [broker]);
 
   useEffect(() => { load(); }, [load]);
 

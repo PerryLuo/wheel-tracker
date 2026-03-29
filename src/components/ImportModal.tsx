@@ -178,7 +178,7 @@ export default function ImportModal({ onClose, onSuccess }: Props) {
                   Drop file here or click to browse
                 </p>
                 <p className="text-xs" style={{ color: TEXT_SECONDARY }}>
-                  Supports Schwab JSON export · select multiple files at once
+                  Supports Schwab JSON and Robinhood CSV · select multiple files at once
                 </p>
                 <input
                   ref={fileInputRef}

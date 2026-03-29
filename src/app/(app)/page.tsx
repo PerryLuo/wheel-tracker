@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useBrokerFilter } from "@/hooks/useBrokerFilter";
 import type { Transaction, PeriodPnl } from "@/lib/types";
 
 const C = {
@@ -432,8 +433,9 @@ const USER_BACKGROUNDS: Record<string, { left: string; right: string }> = {
   // add uuid: { left: "/bg-perry.png", right: "/bg-perry2.png" }
 };
 
-export default function PnlPage() {
-  const { data, loading, error } = useTransactions();
+function PnlPageInner() {
+  const broker = useBrokerFilter();
+  const { data, loading, error } = useTransactions(broker);
   const [view, setView] = useState<"weekly" | "monthly">("weekly");
   const [bgImages, setBgImages] = useState<{ left: string; right: string } | null>(null);
 
@@ -605,5 +607,13 @@ export default function PnlPage() {
       </div>
       </div> {/* end relative content wrapper */}
     </div>
+  );
+}
+
+export default function PnlPage() {
+  return (
+    <Suspense>
+      <PnlPageInner />
+    </Suspense>
   );
 }

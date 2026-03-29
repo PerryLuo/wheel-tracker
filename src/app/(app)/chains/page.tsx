@@ -1,6 +1,8 @@
 "use client";
 
+import { Suspense } from "react";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useBrokerFilter } from "@/hooks/useBrokerFilter";
 import KpiCards from "@/components/KpiCards";
 import ChainTable from "@/components/ChainTable";
 
@@ -38,8 +40,9 @@ function EmptyState() {
   );
 }
 
-export default function ChainsPage() {
-  const { data, loading, error } = useTransactions();
+function ChainsPageInner() {
+  const broker = useBrokerFilter();
+  const { data, loading, error } = useTransactions(broker);
 
   if (loading) return <Spinner />;
 
@@ -68,5 +71,13 @@ export default function ChainsPage() {
       <KpiCards chains={data.chains} />
       <ChainTable chains={data.chains} />
     </div>
+  );
+}
+
+export default function ChainsPage() {
+  return (
+    <Suspense>
+      <ChainsPageInner />
+    </Suspense>
   );
 }
