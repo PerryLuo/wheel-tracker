@@ -35,5 +35,11 @@ export function useTransactions() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Re-fetch when another component signals new data was imported
+  useEffect(() => {
+    window.addEventListener("transactions-updated", load);
+    return () => window.removeEventListener("transactions-updated", load);
+  }, [load]);
+
   return { data, loading, error, refresh: load };
 }

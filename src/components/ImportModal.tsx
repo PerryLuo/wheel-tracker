@@ -44,43 +44,71 @@ export default function ImportModal({ onClose, onSuccess }: Props) {
     return "Unknown format";
   }
 
-  async function submit(content: string, filename?: string) {
+  async function submitOne(content: string, filename?: string): Promise<ImportResult> {
+    const res = await fetch("/api/import", {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain",
+        ...(filename ? { "x-filename": filename } : {}),
+      },
+      body: content,
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? "Import failed");
+    return json as ImportResult;
+  }
+
+  async function handleFiles(files: File[]) {
+    if (!files.length) return;
     setStep("loading");
-    setDetectedBroker(detectBroker(content, filename));
+    setDetectedBroker(files.length > 1 ? `${files.length} files` : detectBroker("", files[0].name));
     try {
-      const res = await fetch("/api/import", {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/plain",
-          ...(filename ? { "x-filename": filename } : {}),
-        },
-        body: content,
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Import failed");
-      setResult(json);
+      let totalImported = 0;
+      let totalSkipped = 0;
+      const allErrors: string[] = [];
+      for (const file of files) {
+        const content = await file.text();
+        if (files.length === 1) setDetectedBroker(detectBroker(content, file.name));
+        const r = await submitOne(content, file.name);
+        totalImported += r.imported;
+        totalSkipped += r.skipped;
+        allErrors.push(...r.errors);
+      }
+      const combined = { imported: totalImported, skipped: totalSkipped, errors: allErrors };
+      setResult(combined);
       setStep("success");
-      if (json.imported > 0) onSuccess();
+      if (totalImported > 0) {
+        window.dispatchEvent(new Event("transactions-updated"));
+        onSuccess();
+      }
     } catch (e) {
       setErrorMsg((e as Error).message);
       setStep("error");
     }
   }
 
-  function handleFile(file: File) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const content = e.target?.result as string;
-      submit(content, file.name);
-    };
-    reader.readAsText(file);
+  async function submitPaste(content: string) {
+    setStep("loading");
+    setDetectedBroker(detectBroker(content));
+    try {
+      const r = await submitOne(content);
+      setResult(r);
+      setStep("success");
+      if (r.imported > 0) {
+        window.dispatchEvent(new Event("transactions-updated"));
+        onSuccess();
+      }
+    } catch (e) {
+      setErrorMsg((e as Error).message);
+      setStep("error");
+    }
   }
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length) handleFiles(files);
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -150,16 +178,17 @@ export default function ImportModal({ onClose, onSuccess }: Props) {
                   Drop file here or click to browse
                 </p>
                 <p className="text-xs" style={{ color: TEXT_SECONDARY }}>
-                  Supports Schwab JSON export (.json)
+                  Supports Schwab JSON export · select multiple files at once
                 </p>
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept=".json,.csv"
+                  multiple
                   className="hidden"
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFile(file);
+                    const files = Array.from(e.target.files ?? []);
+                    if (files.length) handleFiles(files);
                   }}
                 />
               </div>
@@ -188,7 +217,7 @@ export default function ImportModal({ onClose, onSuccess }: Props) {
               {/* Submit button */}
               <button
                 disabled={!pasteValue.trim() || step === "loading"}
-                onClick={() => submit(pasteValue.trim())}
+                onClick={() => submitPaste(pasteValue.trim())}
                 className="rounded-lg py-2.5 text-sm font-medium transition-opacity disabled:opacity-40"
                 style={{ backgroundColor: ACCENT, color: "#0a0e1a" }}
               >
