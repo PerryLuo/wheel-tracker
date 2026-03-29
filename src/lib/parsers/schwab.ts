@@ -3,6 +3,7 @@ import type { BrokerParser } from "./normalize";
 import { parseJsonFile, parseCurrency, parseQuantity, buildTxId } from "./utils";
 
 // Schwab action labels → our normalized action strings
+// Only option-relevant actions — dividends, transfers, journals, interest are skipped
 const ACTION_MAP: Record<string, string> = {
   "Sell to Open": "STO",
   "Buy to Close": "BTC",
@@ -12,12 +13,6 @@ const ACTION_MAP: Record<string, string> = {
   "Expired": "Expired",
   "Buy": "Buy",
   "Sell": "Sell",
-  "Cash Dividend": "Dividend",
-  "Reinvest Dividend": "Dividend",
-  "Wire Funds": "Transfer",
-  "Wire Funds Received": "Transfer",
-  "Journal": "Journal",
-  "Margin Interest": "Interest",
 };
 
 interface SchwabRawTx {
@@ -130,8 +125,25 @@ export const schwabParser: BrokerParser = {
     if (!data?.BrokerageTransactions) {
       throw new Error("Invalid Schwab JSON: missing BrokerageTransactions");
     }
+
+    // Identify tickers with option activity
+    const optionTickers = new Set<string>();
+    for (const tx of data.BrokerageTransactions) {
+      const parts = tx.Symbol.trim().split(/\s+/);
+      if (parts.length === 4) optionTickers.add(parts[0]);
+    }
+
     return data.BrokerageTransactions
       .map(parseTx)
-      .filter((tx): tx is Transaction => tx !== null);
+      .filter((tx): tx is Transaction => {
+        if (tx === null) return false;
+        // Keep all option transactions
+        if (tx.symbol !== null) return true;
+        // For stock Buy/Sell, only keep if ticker has option activity (assignment legs)
+        if (tx.action === "Buy" || tx.action === "Sell") {
+          return optionTickers.has(tx.underlying ?? "");
+        }
+        return true;
+      });
   },
 };
