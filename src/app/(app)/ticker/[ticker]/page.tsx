@@ -40,13 +40,13 @@ function moneyColor(n: number): string {
 // ── Options Calculator ────────────────────────────────────────────────────────
 
 const CALC_LEGEND = [
-  { type: "CSP", col: "OTM%",           desc: "How far below the stock price your strike is. Higher = safer but less premium." },
-  { type: "CSP", col: "Return%",        desc: "Weekly return on capital: premium ÷ strike × 100. Core number for picking a strike." },
-  { type: "CSP", col: "Max Profit",     desc: "Total cash collected per contract (premium × 100 shares)." },
-  { type: "CC",  col: "Income",         desc: "Total premium collected from selling the call (premium × your total shares)." },
-  { type: "CC",  col: "Yield%",         desc: "Premium as a % of your cost basis per share." },
-  { type: "CC",  col: "If Assigned Net","desc": "Total P&L if called away: option premium + (strike − cost basis) × shares. Breakdown shows option vs equity components." },
-  { type: "CC",  col: "Total ROI%",     desc: "Net P&L as a % of total capital deployed to acquire the shares." },
+  { type: "CSP", col: "OTM%",       desc: "How far below the stock price your strike is. Higher = safer but less premium." },
+  { type: "CSP", col: "ROI%",       desc: "Return on capital: premium ÷ strike × 100. Core number for picking a strike." },
+  { type: "CSP", col: "Premium",    desc: "Total cash collected per contract (premium × 100 shares)." },
+  { type: "CC",  col: "Premium",    desc: "Total income from selling the call (premium × your total shares)." },
+  { type: "CC",  col: "ROI%",       desc: "Premium income as a % of committed capital (assignment price × shares)." },
+  { type: "CC",  col: "Net P&L",    desc: "Total P&L if called away: all option premiums earned (historical + new) + stock appreciation from assignment price. Breakdown shows option total vs equity gain." },
+  { type: "CC",  col: "Total ROI%", desc: "Net P&L as a % of total capital deployed to acquire the shares." },
 ];
 
 type CalcRowType = "CSP" | "CC";
@@ -63,8 +63,11 @@ function OptionsCalculator({ ticker, assignedChains }: { ticker: string; assigne
 
   // CC position context
   const totalShares = assignedChains.reduce((s, c) => s + c.contracts * 100, 0);
+  const totalCommitted = assignedChains.reduce((s, c) => s + c.committedCapital, 0);
   const totalCapital = assignedChains.reduce((s, c) => s + (c.costBasis! * c.contracts * 100), 0);
+  const blendedAssignmentPrice = totalShares > 0 ? totalCommitted / totalShares : 0;
   const blendedCB = totalShares > 0 ? totalCapital / totalShares : 0;
+  const historicalOptionPnl = assignedChains.reduce((s, c) => s + c.netPnl, 0);
   const hasPosition = assignedChains.length > 0;
 
   const priceNum = parseFloat(price) || 0;
@@ -94,16 +97,16 @@ function OptionsCalculator({ ticker, assignedChains }: { ticker: string; assigne
       const otmPct = priceNum > 0 && strike > 0 ? ((priceNum - strike) / priceNum) * 100 : null;
       const returnPct = strike > 0 && premium > 0 ? (premium / strike) * 100 : null;
       const maxProfit = premium > 0 ? premium * 100 : null;
-      return { ...row, otmPct, returnPct, maxProfit, income: null, yieldPct: null, optionPnl: null, equityPnl: null, netPnl: null, roiPct: null, aboveCB: false };
+      return { ...row, otmPct, returnPct, maxProfit, premiumIncome: null, roiOnPremiumPct: null, optionPnl: null, equityPnl: null, netPnl: null, roiPct: null, aboveCB: false };
     } else {
-      const income = premium > 0 && totalShares > 0 ? premium * totalShares : null;
-      const yieldPct = premium > 0 && blendedCB > 0 ? (premium / blendedCB) * 100 : null;
-      const optionPnl = income;
-      const equityPnl = strike > 0 && blendedCB > 0 && totalShares > 0 ? (strike - blendedCB) * totalShares : null;
+      const premiumIncome = premium > 0 && totalShares > 0 ? premium * totalShares : null;
+      const roiOnPremiumPct = premiumIncome !== null && totalCommitted > 0 ? (premiumIncome / totalCommitted) * 100 : null;
+      const optionPnl = premiumIncome !== null ? historicalOptionPnl + premiumIncome : null;
+      const equityPnl = strike > 0 && totalShares > 0 ? (strike - blendedAssignmentPrice) * totalShares : null;
       const netPnl = optionPnl !== null && equityPnl !== null ? optionPnl + equityPnl : null;
-      const roiPct = netPnl !== null && totalCapital > 0 ? (netPnl / totalCapital) * 100 : null;
+      const roiPct = netPnl !== null && totalCommitted > 0 ? (netPnl / totalCommitted) * 100 : null;
       const aboveCB = strike > 0 && blendedCB > 0 && strike >= blendedCB;
-      return { ...row, otmPct: null, returnPct: null, maxProfit: null, income, yieldPct, optionPnl, equityPnl, netPnl, roiPct, aboveCB };
+      return { ...row, otmPct: null, returnPct: null, maxProfit: null, premiumIncome, roiOnPremiumPct, optionPnl, equityPnl, netPnl, roiPct, aboveCB };
     }
   });
 
@@ -196,8 +199,10 @@ function OptionsCalculator({ ticker, assignedChains }: { ticker: string; assigne
                   <span className="text-xs" style={{ color: C.muted }}>
                     CC position:{" "}
                     <span className="font-mono" style={{ color: C.accent }}>{totalShares} sh</span>
-                    {" @ "}
-                    <span className="font-mono" style={{ color: C.accent }}>${blendedCB.toFixed(2)}</span> CB
+                    {" assigned @ "}
+                    <span className="font-mono" style={{ color: C.accent }}>${blendedAssignmentPrice.toFixed(2)}</span>
+                    {" · CB "}
+                    <span className="font-mono" style={{ color: C.accent }}>${blendedCB.toFixed(2)}</span>
                   </span>
                 ) : (
                   <span className="text-xs" style={{ color: C.muted }}>No assigned position — CC rows need a cost basis</span>
@@ -214,97 +219,103 @@ function OptionsCalculator({ ticker, assignedChains }: { ticker: string; assigne
                 return (
                   <div
                     key={row.id}
-                    className="flex items-start gap-3 px-4 py-3 flex-wrap"
+                    className="flex flex-col px-4 py-3"
                     style={{
                       borderBottom: "1px solid rgba(30,45,69,0.4)",
                       backgroundColor: best ? "rgba(0,212,170,0.06)" : row.aboveCB ? "rgba(16,185,129,0.04)" : undefined,
                     }}
                   >
-                    {/* Type toggle */}
-                    <div className="flex rounded overflow-hidden shrink-0" style={{ border: `1px solid ${C.border}` }}>
-                      {(["CSP", "CC"] as const).map((t) => (
-                        <button
-                          key={t}
-                          onClick={() => setRowType(row.id, t)}
-                          className="px-2 py-0.5 text-xs font-mono font-semibold transition-colors"
-                          style={{
-                            backgroundColor: row.type === t ? (t === "CSP" ? "rgba(0,212,170,0.15)" : "rgba(59,130,246,0.15)") : "transparent",
-                            color: row.type === t ? (t === "CSP" ? C.accent : C.accent2) : C.muted,
-                            borderRight: t === "CSP" ? `1px solid ${C.border}` : undefined,
-                          }}
-                        >
-                          {t}
-                        </button>
-                      ))}
+                    {/* Line 1: type toggle + inputs + delete */}
+                    <div className="flex items-center gap-3">
+                      {/* Type toggle */}
+                      <div className="flex rounded overflow-hidden shrink-0" style={{ border: `1px solid ${C.border}` }}>
+                        {(["CSP", "CC"] as const).map((t) => (
+                          <button
+                            key={t}
+                            onClick={() => setRowType(row.id, t)}
+                            className="px-2 py-0.5 text-xs font-mono font-semibold transition-colors"
+                            style={{
+                              backgroundColor: row.type === t ? (t === "CSP" ? "rgba(0,212,170,0.15)" : "rgba(59,130,246,0.15)") : "transparent",
+                              color: row.type === t ? (t === "CSP" ? C.accent : C.accent2) : C.muted,
+                              borderRight: t === "CSP" ? `1px solid ${C.border}` : undefined,
+                            }}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Inputs */}
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number" step="0.5" min="0" value={row.strike}
+                          onChange={(e) => updateRow(row.id, "strike", e.target.value)}
+                          placeholder="strike"
+                          className="font-mono text-sm w-20 bg-transparent outline-none text-right"
+                          style={{ color: C.text, borderBottom: `1px solid ${C.border}` }}
+                        />
+                        <span className="text-xs px-1" style={{ color: C.muted }}>@</span>
+                        <input
+                          type="number" step="0.01" min="0" value={row.premium}
+                          onChange={(e) => updateRow(row.id, "premium", e.target.value)}
+                          placeholder="prem"
+                          className="font-mono text-sm w-16 bg-transparent outline-none text-right"
+                          style={{ color: C.text, borderBottom: `1px solid ${C.border}` }}
+                        />
+                        <span className="text-xs" style={{ color: C.muted }}>/sh</span>
+                      </div>
+                      <div className="flex-1" />
+                      {/* Delete */}
+                      <button onClick={() => removeRow(row.id)} style={{ color: C.muted }}>×</button>
                     </div>
 
-                    {/* Inputs */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <input
-                        type="number" step="0.5" min="0" value={row.strike}
-                        onChange={(e) => updateRow(row.id, "strike", e.target.value)}
-                        placeholder="strike"
-                        className="font-mono text-sm w-20 bg-transparent outline-none text-right"
-                        style={{ color: C.text, borderBottom: `1px solid ${C.border}` }}
-                      />
-                      <span className="text-xs px-1" style={{ color: C.muted }}>@</span>
-                      <input
-                        type="number" step="0.01" min="0" value={row.premium}
-                        onChange={(e) => updateRow(row.id, "premium", e.target.value)}
-                        placeholder="prem"
-                        className="font-mono text-sm w-16 bg-transparent outline-none text-right"
-                        style={{ color: C.text, borderBottom: `1px solid ${C.border}` }}
-                      />
-                      <span className="text-xs" style={{ color: C.muted }}>/sh</span>
-                    </div>
-
-                    {/* Computed results */}
-                    <div className="flex-1 flex items-start flex-wrap gap-x-5 gap-y-1 pt-0.5">
-                      {row.type === "CSP" ? (
-                        <>
-                          <span className="font-mono text-sm" style={{ color: row.otmPct === null ? C.muted : row.otmPct >= 0 ? C.text2 : C.red }}>
-                            OTM {row.otmPct !== null ? `${row.otmPct.toFixed(1)}%` : "—"}
-                          </span>
-                          <span className="font-mono text-sm" style={{ color: row.returnPct !== null ? (best ? C.accent : moneyColor(row.returnPct)) : C.muted, fontWeight: best ? 600 : undefined }}>
-                            Return {row.returnPct !== null ? `${row.returnPct.toFixed(2)}%` : "—"}
-                          </span>
-                          <span className="font-mono text-sm" style={{ color: row.maxProfit !== null ? C.accent : C.muted }}>
-                            Max {row.maxProfit !== null ? fmtMoney(row.maxProfit) : "—"}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="font-mono text-sm" style={{ color: row.income !== null ? C.accent2 : C.muted }}>
-                            Income {row.income !== null ? fmtMoney(row.income) : "—"}
-                          </span>
-                          <span className="font-mono text-sm" style={{ color: row.yieldPct !== null ? moneyColor(row.yieldPct) : C.muted }}>
-                            Yield {row.yieldPct !== null ? `${row.yieldPct.toFixed(2)}%` : "—"}
-                          </span>
-                          <div className="flex flex-col">
-                            <span className="font-mono text-sm font-semibold" style={{ color: row.netPnl !== null ? moneyColor(row.netPnl) : C.muted }}>
-                              Net {row.netPnl !== null ? fmtMoney(row.netPnl, true) : "—"}
+                    {/* Line 2: computed results */}
+                    {(row.strike || row.premium) && (
+                      <div className="flex items-baseline gap-x-5 gap-y-1 mt-2 pl-0.5 flex-wrap">
+                        {row.type === "CSP" ? (
+                          <>
+                            <span className="font-mono text-sm" style={{ color: row.otmPct === null ? C.muted : row.otmPct >= 0 ? C.text2 : C.red }}>
+                              OTM {row.otmPct !== null ? `${row.otmPct.toFixed(1)}%` : "—"}
                             </span>
-                            {row.optionPnl !== null && row.equityPnl !== null && (
-                              <span className="font-mono text-xs" style={{ color: C.muted }}>
-                                opt {fmtMoney(row.optionPnl, true)} · eq {fmtMoney(row.equityPnl, true)}
+                            <span className="font-mono text-sm" style={{ color: row.returnPct !== null ? (best ? C.accent : moneyColor(row.returnPct)) : C.muted, fontWeight: best ? 600 : undefined }}>
+                              ROI {row.returnPct !== null ? `${row.returnPct.toFixed(2)}%` : "—"}
+                            </span>
+                            <span className="font-mono text-sm" style={{ color: row.maxProfit !== null ? C.accent : C.muted }}>
+                              Premium {row.maxProfit !== null ? fmtMoney(row.maxProfit) : "—"}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-mono text-sm" style={{ color: row.premiumIncome !== null ? C.accent2 : C.muted }}>
+                              Premium {row.premiumIncome !== null ? fmtMoney(row.premiumIncome) : "—"}
+                              {row.roiOnPremiumPct !== null && (
+                                <span className="ml-2 text-xs" style={{ color: moneyColor(row.roiOnPremiumPct) }}>
+                                  {row.roiOnPremiumPct.toFixed(2)}% ROI
+                                </span>
+                              )}
+                            </span>
+                            <div className="flex flex-col">
+                              <span className="font-mono text-sm font-semibold" style={{ color: row.netPnl !== null ? moneyColor(row.netPnl) : C.muted }}>
+                                Net P&L {row.netPnl !== null ? fmtMoney(row.netPnl, true) : "—"}
+                              </span>
+                              {row.optionPnl !== null && row.equityPnl !== null && (
+                                <span className="font-mono text-xs" style={{ color: C.muted }}>
+                                  opt {fmtMoney(row.optionPnl, true)} · eq {fmtMoney(row.equityPnl, true)}
+                                </span>
+                              )}
+                            </div>
+                            <span className="font-mono text-sm" style={{ color: row.roiPct !== null ? moneyColor(row.roiPct) : C.muted }}>
+                              Total ROI {row.roiPct !== null ? `${row.roiPct >= 0 ? "+" : ""}${row.roiPct.toFixed(1)}%` : "—"}
+                            </span>
+                            {row.aboveCB && (
+                              <span className="text-xs px-1 rounded font-mono"
+                                style={{ backgroundColor: "rgba(16,185,129,0.12)", color: C.green, border: "1px solid rgba(16,185,129,0.2)" }}>
+                                ↑CB
                               </span>
                             )}
-                          </div>
-                          <span className="font-mono text-sm" style={{ color: row.roiPct !== null ? moneyColor(row.roiPct) : C.muted }}>
-                            ROI {row.roiPct !== null ? `${row.roiPct >= 0 ? "+" : ""}${row.roiPct.toFixed(1)}%` : "—"}
-                          </span>
-                          {row.aboveCB && (
-                            <span className="text-xs px-1 rounded font-mono"
-                              style={{ backgroundColor: "rgba(16,185,129,0.12)", color: C.green, border: "1px solid rgba(16,185,129,0.2)" }}>
-                              ↑CB
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </div>
-
-                    {/* Delete */}
-                    <button onClick={() => removeRow(row.id)} className="shrink-0" style={{ color: C.muted }}>×</button>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
