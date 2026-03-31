@@ -37,35 +37,44 @@ function moneyColor(n: number): string {
   return n > 0 ? C.accent : n < 0 ? C.red : C.text2;
 }
 
-// ── CSP Scanner ───────────────────────────────────────────────────────────────
+// ── Options Calculator ────────────────────────────────────────────────────────
 
-const CSP_LEGEND = [
-  { col: "OTM%",          desc: "How far below the stock price your strike is. Higher = safer but less premium." },
-  { col: "Return%",       desc: "Weekly return on capital deployed: premium ÷ strike × 100. Core number for picking a strike." },
-  { col: "Max Profit",    desc: "Total cash collected per contract (1 contract = 100 shares)." },
+const CALC_LEGEND = [
+  { type: "CSP", col: "OTM%",           desc: "How far below the stock price your strike is. Higher = safer but less premium." },
+  { type: "CSP", col: "Return%",        desc: "Weekly return on capital: premium ÷ strike × 100. Core number for picking a strike." },
+  { type: "CSP", col: "Max Profit",     desc: "Total cash collected per contract (premium × 100 shares)." },
+  { type: "CC",  col: "Income",         desc: "Total premium collected from selling the call (premium × your total shares)." },
+  { type: "CC",  col: "Yield%",         desc: "Premium as a % of your cost basis per share." },
+  { type: "CC",  col: "If Assigned Net","desc": "Total P&L if called away: option premium + (strike − cost basis) × shares. Breakdown shows option vs equity components." },
+  { type: "CC",  col: "Total ROI%",     desc: "Net P&L as a % of total capital deployed to acquire the shares." },
 ];
 
-type CspRow = { id: number; strike: string; premium: string };
+type CalcRowType = "CSP" | "CC";
+type CalcRow = { id: number; type: CalcRowType; strike: string; premium: string };
 
-function CspScanner({ ticker }: { ticker: string }) {
+function OptionsCalculator({ ticker, assignedChains }: { ticker: string; assignedChains: Chain[] }) {
   void ticker;
   const [open, setOpen] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
   const [price, setPrice] = useState("");
   const [expiry, setExpiry] = useState("");
-  const [rows, setRows] = useState<CspRow[]>([]);
+  const [rows, setRows] = useState<CalcRow[]>([]);
   const [nextId, setNextId] = useState(0);
 
+  // CC position context
+  const totalShares = assignedChains.reduce((s, c) => s + c.contracts * 100, 0);
+  const totalCapital = assignedChains.reduce((s, c) => s + (c.costBasis! * c.contracts * 100), 0);
+  const blendedCB = totalShares > 0 ? totalCapital / totalShares : 0;
+  const hasPosition = assignedChains.length > 0;
+
   const priceNum = parseFloat(price) || 0;
-  const dte = expiry
-    ? Math.max(1, Math.round(
-        (new Date(expiry + "T12:00:00").getTime() - Date.now()) / 86_400_000
-      ))
-    : null;
   const todayStr = new Date().toISOString().slice(0, 10);
+  const dte = expiry
+    ? Math.max(1, Math.round((new Date(expiry + "T12:00:00").getTime() - Date.now()) / 86_400_000))
+    : null;
 
   function addRow() {
-    setRows((p) => [...p, { id: nextId, strike: "", premium: "" }]);
+    setRows((p) => [...p, { id: nextId, type: "CSP", strike: "", premium: "" }]);
     setNextId((n) => n + 1);
     setOpen(true);
   }
@@ -73,17 +82,33 @@ function CspScanner({ ticker }: { ticker: string }) {
   function updateRow(id: number, field: "strike" | "premium", value: string) {
     setRows((p) => p.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
   }
+  function setRowType(id: number, type: CalcRowType) {
+    setRows((p) => p.map((r) => (r.id === id ? { ...r, type } : r)));
+  }
 
   const computed = rows.map((row) => {
     const strike = parseFloat(row.strike) || 0;
     const premium = parseFloat(row.premium) || 0;
-    const otmPct = priceNum > 0 && strike > 0 ? ((priceNum - strike) / priceNum) * 100 : null;
-    const returnPct = strike > 0 && premium > 0 ? (premium / strike) * 100 : null;
-    const maxProfit = premium > 0 ? premium * 100 : null;
-    return { ...row, otmPct, returnPct, maxProfit };
+
+    if (row.type === "CSP") {
+      const otmPct = priceNum > 0 && strike > 0 ? ((priceNum - strike) / priceNum) * 100 : null;
+      const returnPct = strike > 0 && premium > 0 ? (premium / strike) * 100 : null;
+      const maxProfit = premium > 0 ? premium * 100 : null;
+      return { ...row, otmPct, returnPct, maxProfit, income: null, yieldPct: null, optionPnl: null, equityPnl: null, netPnl: null, roiPct: null, aboveCB: false };
+    } else {
+      const income = premium > 0 && totalShares > 0 ? premium * totalShares : null;
+      const yieldPct = premium > 0 && blendedCB > 0 ? (premium / blendedCB) * 100 : null;
+      const optionPnl = income;
+      const equityPnl = strike > 0 && blendedCB > 0 && totalShares > 0 ? (strike - blendedCB) * totalShares : null;
+      const netPnl = optionPnl !== null && equityPnl !== null ? optionPnl + equityPnl : null;
+      const roiPct = netPnl !== null && totalCapital > 0 ? (netPnl / totalCapital) * 100 : null;
+      const aboveCB = strike > 0 && blendedCB > 0 && strike >= blendedCB;
+      return { ...row, otmPct: null, returnPct: null, maxProfit: null, income, yieldPct, optionPnl, equityPnl, netPnl, roiPct, aboveCB };
+    }
   });
 
-  const maxReturn = Math.max(...computed.map((r) => r.returnPct ?? -Infinity), -Infinity);
+  const maxReturn = Math.max(...computed.filter((r) => r.type === "CSP").map((r) => r.returnPct ?? -Infinity), -Infinity);
+  const hasCCRows = computed.some((r) => r.type === "CC");
 
   return (
     <div className="rounded-xl overflow-hidden mb-5" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
@@ -96,14 +121,13 @@ function CspScanner({ ticker }: { ticker: string }) {
         <div className="flex items-center gap-2">
           <span style={{ color: C.muted, fontSize: 9 }}>{open ? "▼" : "▶"}</span>
           <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.text2, letterSpacing: "0.8px" }}>
-            CSP Scanner
+            Options Calculator
           </span>
           {rows.length > 0 && (
             <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(0,212,170,0.08)", color: C.accent, border: "1px solid rgba(0,212,170,0.15)" }}>
               {rows.length} row{rows.length !== 1 ? "s" : ""}
             </span>
           )}
-          {/* Info icon */}
           <button
             onClick={(e) => { e.stopPropagation(); setShowLegend((v) => !v); setOpen(true); }}
             title="What do these metrics mean?"
@@ -127,16 +151,24 @@ function CspScanner({ ticker }: { ticker: string }) {
           {/* Legend */}
           {showLegend && (
             <div className="px-5 py-3" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: "rgba(0,212,170,0.03)" }}>
-              {CSP_LEGEND.map(({ col, desc }) => (
-                <div key={col} className="flex gap-3 py-1">
+              <p className="text-xs font-semibold uppercase mb-2" style={{ color: C.text2, letterSpacing: "0.8px" }}>CSP</p>
+              {CALC_LEGEND.filter((l) => l.type === "CSP").map(({ col, desc }) => (
+                <div key={col} className="flex gap-3 py-0.5">
                   <span className="font-mono text-xs w-24 shrink-0" style={{ color: C.accent }}>{col}</span>
+                  <span className="text-xs" style={{ color: C.text2 }}>{desc}</span>
+                </div>
+              ))}
+              <p className="text-xs font-semibold uppercase mt-3 mb-2" style={{ color: C.text2, letterSpacing: "0.8px" }}>Covered Call</p>
+              {CALC_LEGEND.filter((l) => l.type === "CC").map(({ col, desc }) => (
+                <div key={col} className="flex gap-3 py-0.5">
+                  <span className="font-mono text-xs w-36 shrink-0" style={{ color: C.accent2 }}>{col}</span>
                   <span className="text-xs" style={{ color: C.text2 }}>{desc}</span>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Inputs */}
+          {/* Shared context bar */}
           <div className="flex items-center gap-6 px-5 py-3 flex-wrap" style={{ borderBottom: `1px solid ${C.border}` }}>
             <label className="flex items-center gap-2">
               <span className="text-xs uppercase" style={{ color: C.muted, letterSpacing: "0.8px" }}>Stock Price</span>
@@ -157,270 +189,129 @@ function CspScanner({ ticker }: { ticker: string }) {
                 style={{ color: C.text, borderBottom: `1px solid ${C.border}`, colorScheme: "dark" }}
               />
             </label>
-            {dte !== null && (
-              <span className="font-mono text-xs" style={{ color: C.text2 }}>{dte} DTE</span>
+            {dte !== null && <span className="font-mono text-xs" style={{ color: C.text2 }}>{dte} DTE</span>}
+            {hasCCRows && (
+              <div className="flex items-center gap-3 pl-4" style={{ borderLeft: `1px solid ${C.border}` }}>
+                {hasPosition ? (
+                  <span className="text-xs" style={{ color: C.muted }}>
+                    CC position:{" "}
+                    <span className="font-mono" style={{ color: C.accent }}>{totalShares} sh</span>
+                    {" @ "}
+                    <span className="font-mono" style={{ color: C.accent }}>${blendedCB.toFixed(2)}</span> CB
+                  </span>
+                ) : (
+                  <span className="text-xs" style={{ color: C.muted }}>No assigned position — CC rows need a cost basis</span>
+                )}
+              </div>
             )}
           </div>
 
-          {/* Table */}
+          {/* Rows */}
           {rows.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    {["Strike", "Premium/sh", "OTM%", "Return%", "Max Profit", ""].map((h) => (
-                      <th key={h} className="px-4 py-2 text-left text-xs uppercase"
-                        style={{ color: C.muted, letterSpacing: "0.8px", borderBottom: `1px solid ${C.border}`, fontWeight: 500 }}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {computed.map((row) => {
-                    const best = row.returnPct !== null && maxReturn > 0 && row.returnPct === maxReturn;
-                    return (
-                      <tr key={row.id} style={{ borderBottom: "1px solid rgba(30,45,69,0.4)", backgroundColor: best ? "rgba(0,212,170,0.06)" : undefined }}>
-                        <td className="px-4 py-2">
-                          <input type="number" step="0.5" min="0" value={row.strike}
-                            onChange={(e) => updateRow(row.id, "strike", e.target.value)}
-                            placeholder="0.00" className="font-mono text-sm w-20 bg-transparent outline-none text-right"
-                            style={{ color: C.text }} />
-                        </td>
-                        <td className="px-4 py-2">
-                          <input type="number" step="0.01" min="0" value={row.premium}
-                            onChange={(e) => updateRow(row.id, "premium", e.target.value)}
-                            placeholder="0.00" className="font-mono text-sm w-20 bg-transparent outline-none text-right"
-                            style={{ color: C.text }} />
-                        </td>
-                        <td className="px-4 py-2.5 font-mono text-sm"
-                          style={{ color: row.otmPct === null ? C.muted : row.otmPct >= 0 ? C.text2 : C.red }}>
-                          {row.otmPct !== null ? `${row.otmPct.toFixed(1)}%` : "—"}
-                        </td>
-                        <td className="px-4 py-2.5 font-mono text-sm"
-                          style={{ color: row.returnPct !== null ? (best ? C.accent : moneyColor(row.returnPct)) : C.muted, fontWeight: best ? 600 : undefined }}>
-                          {row.returnPct !== null ? `${row.returnPct.toFixed(2)}%` : "—"}
-                        </td>
-                        <td className="px-4 py-2.5 font-mono text-sm"
-                          style={{ color: row.maxProfit !== null ? C.accent : C.muted }}>
-                          {row.maxProfit !== null ? fmtMoney(row.maxProfit) : "—"}
-                        </td>
-                        <td className="px-4 py-2.5 text-center">
-                          <button onClick={() => removeRow(row.id)} style={{ color: C.muted }}>×</button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="py-8 text-center text-sm" style={{ color: C.muted }}>
-              Click "+ Add row" to compare strikes.
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Covered Call Simulator ────────────────────────────────────────────────────
-
-const CC_LEGEND = [
-  { col: "Premium Income", desc: "Total cash collected from selling the call (premium × your total shares)." },
-  { col: "Yield%",         desc: "Premium as a % of your cost basis — what you earn on your position just from the premium." },
-  { col: "If Assigned Net P&L", desc: "Total profit if the call is exercised: (strike − cost basis) × shares + premium income." },
-  { col: "Total ROI%",     desc: "Net P&L as a % of the capital you originally deployed to acquire the shares." },
-];
-
-type CcRow = { id: number; strike: string; premium: string };
-
-function CcSimulator({ assignedChains }: { assignedChains: Chain[] }) {
-  const [open, setOpen] = useState(false);
-  const [showLegend, setShowLegend] = useState(false);
-  const [rows, setRows] = useState<CcRow[]>([]);
-  const [nextId, setNextId] = useState(0);
-
-  const totalShares = assignedChains.reduce((s, c) => s + c.contracts * 100, 0);
-  const totalCapital = assignedChains.reduce((s, c) => s + (c.costBasis! * c.contracts * 100), 0);
-  const blendedCB = totalShares > 0 ? totalCapital / totalShares : 0;
-
-  function addRow() {
-    setRows((p) => [...p, { id: nextId, strike: "", premium: "" }]);
-    setNextId((n) => n + 1);
-    setOpen(true);
-  }
-  function removeRow(id: number) { setRows((p) => p.filter((r) => r.id !== id)); }
-  function updateRow(id: number, field: "strike" | "premium", value: string) {
-    setRows((p) => p.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
-  }
-
-  const computed = rows.map((row) => {
-    const strike = parseFloat(row.strike) || 0;
-    const premium = parseFloat(row.premium) || 0;
-    const premiumIncome = premium > 0 ? premium * totalShares : null;
-    const yieldPct = premium > 0 && blendedCB > 0 ? (premium / blendedCB) * 100 : null;
-    const ifAssignedNetPnl = strike > 0 && premium > 0 && blendedCB > 0
-      ? (strike - blendedCB) * totalShares + premium * totalShares
-      : null;
-    const totalRoiPct = ifAssignedNetPnl !== null && totalCapital > 0
-      ? (ifAssignedNetPnl / totalCapital) * 100
-      : null;
-    const aboveCB = strike > 0 && blendedCB > 0 && strike >= blendedCB;
-    return { ...row, premiumIncome, yieldPct, ifAssignedNetPnl, totalRoiPct, aboveCB };
-  });
-
-  const validRows = computed.filter((r) => r.premiumIncome !== null);
-  const bestYieldRow = validRows.length > 0
-    ? validRows.reduce((best, r) => ((r.yieldPct ?? 0) > (best.yieldPct ?? 0) ? r : best))
-    : null;
-
-  return (
-    <div className="rounded-xl overflow-hidden mb-5" style={{ backgroundColor: C.surface, border: `1px solid ${C.border}` }}>
-      {/* Header */}
-      <div
-        className="flex items-center justify-between px-5 py-3 cursor-pointer"
-        style={{ borderBottom: open ? `1px solid ${C.border}` : "none" }}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <div className="flex items-center gap-2">
-          <span style={{ color: C.muted, fontSize: 9 }}>{open ? "▼" : "▶"}</span>
-          <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.text2, letterSpacing: "0.8px" }}>
-            Covered Call Simulator
-          </span>
-          {rows.length > 0 && (
-            <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: "rgba(0,212,170,0.08)", color: C.accent, border: "1px solid rgba(0,212,170,0.15)" }}>
-              {rows.length} row{rows.length !== 1 ? "s" : ""}
-            </span>
-          )}
-          <button
-            onClick={(e) => { e.stopPropagation(); setShowLegend((v) => !v); setOpen(true); }}
-            title="What do these metrics mean?"
-            className="text-xs px-1.5 py-0.5 rounded"
-            style={{ color: showLegend ? C.accent : C.muted, backgroundColor: showLegend ? "rgba(0,212,170,0.1)" : "transparent", border: "1px solid transparent" }}
-          >
-            ℹ
-          </button>
-        </div>
-        <button
-          className="text-xs font-mono px-3 py-1 rounded"
-          style={{ backgroundColor: "rgba(0,212,170,0.1)", color: C.accent, border: "1px solid rgba(0,212,170,0.2)" }}
-          onClick={(e) => { e.stopPropagation(); addRow(); }}
-        >
-          + Add row
-        </button>
-      </div>
-
-      {open && (
-        <div>
-          {/* Legend */}
-          {showLegend && (
-            <div className="px-5 py-3" style={{ borderBottom: `1px solid ${C.border}`, backgroundColor: "rgba(0,212,170,0.03)" }}>
-              {CC_LEGEND.map(({ col, desc }) => (
-                <div key={col} className="flex gap-3 py-1">
-                  <span className="font-mono text-xs w-36 shrink-0" style={{ color: C.accent }}>{col}</span>
-                  <span className="text-xs" style={{ color: C.text2 }}>{desc}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Position banner */}
-          <div className="flex items-center gap-6 px-5 py-3 flex-wrap" style={{ borderBottom: `1px solid ${C.border}` }}>
             <div>
-              <span className="text-xs uppercase" style={{ color: C.muted, letterSpacing: "0.8px" }}>Total Shares</span>
-              <span className="font-mono text-sm ml-2" style={{ color: C.text }}>{totalShares.toLocaleString()}</span>
-            </div>
-            <div>
-              <span className="text-xs uppercase" style={{ color: C.muted, letterSpacing: "0.8px" }}>Blended CB</span>
-              <span className="font-mono text-sm ml-2" style={{ color: C.accent }}>${blendedCB.toFixed(2)}/sh</span>
-            </div>
-            <div>
-              <span className="text-xs uppercase" style={{ color: C.muted, letterSpacing: "0.8px" }}>Capital Deployed</span>
-              <span className="font-mono text-sm ml-2" style={{ color: C.text2 }}>{fmtMoney(totalCapital)}</span>
-            </div>
-          </div>
+              {computed.map((row) => {
+                const best = row.type === "CSP" && row.returnPct !== null && maxReturn > 0 && row.returnPct === maxReturn;
+                return (
+                  <div
+                    key={row.id}
+                    className="flex items-start gap-3 px-4 py-3 flex-wrap"
+                    style={{
+                      borderBottom: "1px solid rgba(30,45,69,0.4)",
+                      backgroundColor: best ? "rgba(0,212,170,0.06)" : row.aboveCB ? "rgba(16,185,129,0.04)" : undefined,
+                    }}
+                  >
+                    {/* Type toggle */}
+                    <div className="flex rounded overflow-hidden shrink-0" style={{ border: `1px solid ${C.border}` }}>
+                      {(["CSP", "CC"] as const).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => setRowType(row.id, t)}
+                          className="px-2 py-0.5 text-xs font-mono font-semibold transition-colors"
+                          style={{
+                            backgroundColor: row.type === t ? (t === "CSP" ? "rgba(0,212,170,0.15)" : "rgba(59,130,246,0.15)") : "transparent",
+                            color: row.type === t ? (t === "CSP" ? C.accent : C.accent2) : C.muted,
+                            borderRight: t === "CSP" ? `1px solid ${C.border}` : undefined,
+                          }}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
 
-          {/* Premium-only summary */}
-          {bestYieldRow && (
-            <div className="px-5 py-2.5 text-sm" style={{ borderBottom: `1px solid ${C.border}` }}>
-              <span style={{ color: C.text2 }}>If not assigned: keep </span>
-              <span className="font-mono font-semibold" style={{ color: C.accent }}>{fmtMoney(bestYieldRow.premiumIncome!)}</span>
-              <span style={{ color: C.text2 }}> in premium</span>
-              {bestYieldRow.yieldPct !== null && (
-                <span className="font-mono text-xs ml-2" style={{ color: C.text2 }}>
-                  (+{bestYieldRow.yieldPct.toFixed(2)}% yield on CB)
-                </span>
-              )}
-              {validRows.length > 1 && (
-                <span className="text-xs ml-2" style={{ color: C.muted }}>— best yield row shown</span>
-              )}
-            </div>
-          )}
+                    {/* Inputs */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <input
+                        type="number" step="0.5" min="0" value={row.strike}
+                        onChange={(e) => updateRow(row.id, "strike", e.target.value)}
+                        placeholder="strike"
+                        className="font-mono text-sm w-20 bg-transparent outline-none text-right"
+                        style={{ color: C.text, borderBottom: `1px solid ${C.border}` }}
+                      />
+                      <span className="text-xs px-1" style={{ color: C.muted }}>@</span>
+                      <input
+                        type="number" step="0.01" min="0" value={row.premium}
+                        onChange={(e) => updateRow(row.id, "premium", e.target.value)}
+                        placeholder="prem"
+                        className="font-mono text-sm w-16 bg-transparent outline-none text-right"
+                        style={{ color: C.text, borderBottom: `1px solid ${C.border}` }}
+                      />
+                      <span className="text-xs" style={{ color: C.muted }}>/sh</span>
+                    </div>
 
-          {/* Table */}
-          {rows.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    {["Strike", "Premium/sh", "Premium Income", "Yield%", "If Assigned Net P&L", "Total ROI%", ""].map((h) => (
-                      <th key={h} className="px-4 py-2 text-left text-xs uppercase"
-                        style={{ color: C.muted, letterSpacing: "0.8px", borderBottom: `1px solid ${C.border}`, fontWeight: 500 }}>
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {computed.map((row) => (
-                    <tr key={row.id} style={{ borderBottom: "1px solid rgba(30,45,69,0.4)", backgroundColor: row.aboveCB ? "rgba(16,185,129,0.04)" : undefined }}>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-1.5">
-                          <input type="number" step="0.5" min="0" value={row.strike}
-                            onChange={(e) => updateRow(row.id, "strike", e.target.value)}
-                            placeholder="0.00" className="font-mono text-sm w-20 bg-transparent outline-none text-right"
-                            style={{ color: C.text }} />
+                    {/* Computed results */}
+                    <div className="flex-1 flex items-start flex-wrap gap-x-5 gap-y-1 pt-0.5">
+                      {row.type === "CSP" ? (
+                        <>
+                          <span className="font-mono text-sm" style={{ color: row.otmPct === null ? C.muted : row.otmPct >= 0 ? C.text2 : C.red }}>
+                            OTM {row.otmPct !== null ? `${row.otmPct.toFixed(1)}%` : "—"}
+                          </span>
+                          <span className="font-mono text-sm" style={{ color: row.returnPct !== null ? (best ? C.accent : moneyColor(row.returnPct)) : C.muted, fontWeight: best ? 600 : undefined }}>
+                            Return {row.returnPct !== null ? `${row.returnPct.toFixed(2)}%` : "—"}
+                          </span>
+                          <span className="font-mono text-sm" style={{ color: row.maxProfit !== null ? C.accent : C.muted }}>
+                            Max {row.maxProfit !== null ? fmtMoney(row.maxProfit) : "—"}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-mono text-sm" style={{ color: row.income !== null ? C.accent2 : C.muted }}>
+                            Income {row.income !== null ? fmtMoney(row.income) : "—"}
+                          </span>
+                          <span className="font-mono text-sm" style={{ color: row.yieldPct !== null ? moneyColor(row.yieldPct) : C.muted }}>
+                            Yield {row.yieldPct !== null ? `${row.yieldPct.toFixed(2)}%` : "—"}
+                          </span>
+                          <div className="flex flex-col">
+                            <span className="font-mono text-sm font-semibold" style={{ color: row.netPnl !== null ? moneyColor(row.netPnl) : C.muted }}>
+                              Net {row.netPnl !== null ? fmtMoney(row.netPnl, true) : "—"}
+                            </span>
+                            {row.optionPnl !== null && row.equityPnl !== null && (
+                              <span className="font-mono text-xs" style={{ color: C.muted }}>
+                                opt {fmtMoney(row.optionPnl, true)} · eq {fmtMoney(row.equityPnl, true)}
+                              </span>
+                            )}
+                          </div>
+                          <span className="font-mono text-sm" style={{ color: row.roiPct !== null ? moneyColor(row.roiPct) : C.muted }}>
+                            ROI {row.roiPct !== null ? `${row.roiPct >= 0 ? "+" : ""}${row.roiPct.toFixed(1)}%` : "—"}
+                          </span>
                           {row.aboveCB && (
                             <span className="text-xs px-1 rounded font-mono"
                               style={{ backgroundColor: "rgba(16,185,129,0.12)", color: C.green, border: "1px solid rgba(16,185,129,0.2)" }}>
                               ↑CB
                             </span>
                           )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2">
-                        <input type="number" step="0.01" min="0" value={row.premium}
-                          onChange={(e) => updateRow(row.id, "premium", e.target.value)}
-                          placeholder="0.00" className="font-mono text-sm w-20 bg-transparent outline-none text-right"
-                          style={{ color: C.text }} />
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-sm" style={{ color: row.premiumIncome !== null ? C.accent : C.muted }}>
-                        {row.premiumIncome !== null ? fmtMoney(row.premiumIncome) : "—"}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-sm" style={{ color: row.yieldPct !== null ? moneyColor(row.yieldPct) : C.muted }}>
-                        {row.yieldPct !== null ? `${row.yieldPct.toFixed(2)}%` : "—"}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-sm font-semibold"
-                        style={{ color: row.ifAssignedNetPnl !== null ? moneyColor(row.ifAssignedNetPnl) : C.muted }}>
-                        {row.ifAssignedNetPnl !== null ? fmtMoney(row.ifAssignedNetPnl, true) : "—"}
-                      </td>
-                      <td className="px-4 py-2.5 font-mono text-sm"
-                        style={{ color: row.totalRoiPct !== null ? moneyColor(row.totalRoiPct) : C.muted }}>
-                        {row.totalRoiPct !== null ? `${row.totalRoiPct >= 0 ? "+" : ""}${row.totalRoiPct.toFixed(1)}%` : "—"}
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        <button onClick={() => removeRow(row.id)} style={{ color: C.muted }}>×</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Delete */}
+                    <button onClick={() => removeRow(row.id)} className="shrink-0" style={{ color: C.muted }}>×</button>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="py-8 text-center text-sm" style={{ color: C.muted }}>
-              Click "+ Add row" to simulate a covered call.
+              Click "+ Add row" and choose CSP or CC to compare scenarios.
             </div>
           )}
         </div>
@@ -932,11 +823,8 @@ function TickerPageInner({ params }: { params: Promise<{ ticker: string }> }) {
       {/* Cost Basis Breakdown — only when there are open/assigned chains */}
       {activeChains.length > 0 && <CostBasisTable chains={chains} />}
 
-      {/* CSP Scanner */}
-      <CspScanner ticker={ticker} />
-
-      {/* CC Simulator — only when there are assigned positions with known cost basis */}
-      {assignedActive.length > 0 && <CcSimulator assignedChains={assignedActive} />}
+      {/* Options Calculator */}
+      <OptionsCalculator ticker={ticker} assignedChains={assignedActive} />
 
       {/* Completed Wheel Summary — one card per closed chain with a wheelSummary */}
       {closedChains.filter((c) => c.wheelSummary).map((chain) => (
