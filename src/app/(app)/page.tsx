@@ -4,6 +4,7 @@ import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useBrokerFilter } from "@/hooks/useBrokerFilter";
+import { useYearFilter } from "@/hooks/useYearFilter";
 import type { Transaction, PeriodPnl } from "@/lib/types";
 
 const C = {
@@ -125,7 +126,7 @@ function KpiCard({
   );
 }
 
-function YtdCard({ ytd, ytdCommitted }: { ytd: number; ytdCommitted: number }) {
+function YtdCard({ ytd, ytdCommitted, label }: { ytd: number; ytdCommitted: number; label: string }) {
   return (
     <div
       className="rounded-xl p-5 flex-1"
@@ -139,7 +140,7 @@ function YtdCard({ ytd, ytdCommitted }: { ytd: number; ytdCommitted: number }) {
         className="text-xs uppercase tracking-widest mb-3"
         style={{ color: C.text2, letterSpacing: "0.8px" }}
       >
-        YTD
+        {label}
       </p>
       <p className="text-3xl font-mono font-medium mb-2" style={{ color: moneyColor(ytd) }}>
         {fmt(ytd)}
@@ -435,7 +436,8 @@ const USER_BACKGROUNDS: Record<string, { left: string; right: string }> = {
 
 function PnlPageInner() {
   const broker = useBrokerFilter();
-  const { data, loading, error } = useTransactions(broker);
+  const year = useYearFilter();
+  const { data, loading, error } = useTransactions(broker, year);
   const [view, setView] = useState<"weekly" | "monthly">("weekly");
   const [bgImages, setBgImages] = useState<{ left: string; right: string } | null>(null);
 
@@ -555,7 +557,11 @@ function PnlPageInner() {
       <div className="flex gap-4 mb-6">
         <KpiCard label="Last Week"  period={lastWeek} />
         <KpiCard label="Last Month" period={lastMonth} />
-        <YtdCard ytd={ytd} ytdCommitted={ytdCommitted} />
+        <YtdCard
+          ytd={ytd}
+          ytdCommitted={ytdCommitted}
+          label={year && year !== new Date().getUTCFullYear().toString() ? `${year} Total` : "YTD"}
+        />
       </div>
 
       {/* Breakdown section */}

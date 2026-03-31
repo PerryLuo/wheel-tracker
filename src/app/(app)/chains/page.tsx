@@ -3,6 +3,7 @@
 import { Suspense } from "react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useBrokerFilter } from "@/hooks/useBrokerFilter";
+import { useYearFilter } from "@/hooks/useYearFilter";
 import KpiCards from "@/components/KpiCards";
 import ChainTable from "@/components/ChainTable";
 
@@ -42,7 +43,8 @@ function EmptyState() {
 
 function ChainsPageInner() {
   const broker = useBrokerFilter();
-  const { data, loading, error } = useTransactions(broker);
+  const year = useYearFilter();
+  const { data, loading, error } = useTransactions(broker, year);
 
   if (loading) return <Spinner />;
 

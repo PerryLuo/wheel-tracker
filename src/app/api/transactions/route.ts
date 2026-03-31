@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
     }
 
     const brokerFilter = req.nextUrl.searchParams.get("broker");
+    const yearFilter = req.nextUrl.searchParams.get("year");
 
     let query = supabase
       .from("transactions")
@@ -43,6 +44,12 @@ export async function GET(req: NextRequest) {
 
     if (brokerFilter) {
       query = query.eq("broker", brokerFilter);
+    }
+
+    if (yearFilter) {
+      query = query
+        .gte("date", `${yearFilter}-01-01`)
+        .lte("date", `${yearFilter}-12-31`);
     }
 
     const { data, error } = await query;
@@ -68,10 +75,11 @@ export async function GET(req: NextRequest) {
 
     // YTD + totals (option txs only — exclude stock Buy/Sell)
     const currentYear = new Date().getUTCFullYear().toString();
+    const selectedYear = yearFilter ?? currentYear;
     const optionTxs = transactions.filter(
       (t) => !(( t.action === "Buy" || t.action === "Sell") && t.optionType === null)
     );
-    const ytdTxs = optionTxs.filter((t) => t.date.startsWith(currentYear));
+    const ytdTxs = optionTxs.filter((t) => t.date.startsWith(selectedYear));
 
     const totalPnl = optionTxs.reduce((s, t) => s + t.amount, 0);
     const ytd = ytdTxs.reduce((s, t) => s + t.amount, 0);

@@ -56,8 +56,11 @@ export async function POST(req: NextRequest) {
       skippedTxs.map((tx) => tx.underlying).filter(Boolean)
     )].sort() as string[];
 
-    if (!toInsert.length) {
-      return NextResponse.json({ imported: 0, skipped, importedTickers: [], skippedTickers, errors: [] });
+    const isPreview = req.nextUrl.searchParams.get("preview") === "true";
+
+    // Preview mode: return counts without inserting
+    if (isPreview || !toInsert.length) {
+      return NextResponse.json({ imported: toInsert.length, skipped, importedTickers, skippedTickers, errors: [] });
     }
 
     // Map Transaction → DB row (snake_case columns), stamp user_id

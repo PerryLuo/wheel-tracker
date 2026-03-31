@@ -17,6 +17,8 @@ const BROKERS = [
   { value: "robinhood",  label: "Robinhood" },
 ];
 
+const YEARS = ["2025", "2026"];
+
 function NavInner() {
   const pathname = usePathname();
   const router = useRouter();
@@ -24,6 +26,7 @@ function NavInner() {
   const [showImport, setShowImport] = useState(false);
   const [userName, setUserName] = useState("");
   const activeBroker = searchParams.get("broker") ?? "";
+  const activeYear = searchParams.get("year") ?? "";
 
   function setBroker(value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -31,6 +34,17 @@ function NavInner() {
       params.set("broker", value);
     } else {
       params.delete("broker");
+    }
+    const qs = params.toString();
+    router.push(qs ? `${pathname}?${qs}` : pathname);
+  }
+
+  function setYear(value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) {
+      params.set("year", value);
+    } else {
+      params.delete("year");
     }
     const qs = params.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
@@ -108,6 +122,37 @@ function NavInner() {
                   }}
                 >
                   {label}
+                </button>
+              ))}
+            </div>
+            {/* Year filter pills */}
+            <div
+              className="flex rounded overflow-hidden text-xs font-medium"
+              style={{ border: "1px solid #1e2d3d" }}
+            >
+              <button
+                onClick={() => setYear("")}
+                className="px-3 py-1 transition-colors"
+                style={{
+                  backgroundColor: activeYear === "" ? "#00d4aa22" : "transparent",
+                  color: activeYear === "" ? "#00d4aa" : "#4b6080",
+                  borderRight: "1px solid #1e2d3d",
+                }}
+              >
+                All
+              </button>
+              {YEARS.map((y) => (
+                <button
+                  key={y}
+                  onClick={() => setYear(y)}
+                  className="px-3 py-1 transition-colors"
+                  style={{
+                    backgroundColor: activeYear === y ? "#00d4aa22" : "transparent",
+                    color: activeYear === y ? "#00d4aa" : "#4b6080",
+                    borderRight: y !== YEARS[YEARS.length - 1] ? "1px solid #1e2d3d" : undefined,
+                  }}
+                >
+                  {y}
                 </button>
               ))}
             </div>

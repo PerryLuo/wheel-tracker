@@ -4,6 +4,7 @@ import { use, Suspense } from "react";
 import Link from "next/link";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useBrokerFilter } from "@/hooks/useBrokerFilter";
+import { useYearFilter } from "@/hooks/useYearFilter";
 import type { Chain, Leg } from "@/lib/types";
 import { StatusBadge, LegTypeBadge } from "@/components/ui/Badges";
 
@@ -412,7 +413,8 @@ function TransactionsTable({ legs }: { legs: Leg[] }) {
 function TickerPageInner({ params }: { params: Promise<{ ticker: string }> }) {
   const { ticker } = use(params);
   const broker = useBrokerFilter();
-  const { data, loading, error } = useTransactions(broker);
+  const year = useYearFilter();
+  const { data, loading, error } = useTransactions(broker, year);
 
   if (loading) {
     return (
