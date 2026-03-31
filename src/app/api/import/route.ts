@@ -45,10 +45,19 @@ export async function POST(req: NextRequest) {
     const existingIds = new Set((existing ?? []).map((r: { id: string }) => r.id));
 
     const toInsert = transactions.filter((tx) => !existingIds.has(tx.id));
-    const skipped = transactions.length - toInsert.length;
+    const skippedTxs = transactions.filter((tx) => existingIds.has(tx.id));
+    const skipped = skippedTxs.length;
+
+    // Unique option-bearing tickers in each group (exclude pure stock rows without option context)
+    const importedTickers = [...new Set(
+      toInsert.map((tx) => tx.underlying).filter(Boolean)
+    )].sort() as string[];
+    const skippedTickers = [...new Set(
+      skippedTxs.map((tx) => tx.underlying).filter(Boolean)
+    )].sort() as string[];
 
     if (!toInsert.length) {
-      return NextResponse.json({ imported: 0, skipped, errors: [] });
+      return NextResponse.json({ imported: 0, skipped, importedTickers: [], skippedTickers, errors: [] });
     }
 
     // Map Transaction → DB row (snake_case columns), stamp user_id
@@ -79,6 +88,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       imported: toInsert.length,
       skipped,
+      importedTickers,
+      skippedTickers,
       errors: [],
     });
   } catch (e) {

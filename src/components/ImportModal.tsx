@@ -5,6 +5,8 @@ import { useState, useRef, useCallback } from "react";
 interface ImportResult {
   imported: number;
   skipped: number;
+  importedTickers: string[];
+  skippedTickers: string[];
   errors: string[];
 }
 
@@ -66,6 +68,8 @@ export default function ImportModal({ onClose, onSuccess }: Props) {
       let totalImported = 0;
       let totalSkipped = 0;
       const allErrors: string[] = [];
+      const allImportedTickers = new Set<string>();
+      const allSkippedTickers = new Set<string>();
       for (const file of files) {
         const content = await file.text();
         if (files.length === 1) setDetectedBroker(detectBroker(content, file.name));
@@ -73,8 +77,16 @@ export default function ImportModal({ onClose, onSuccess }: Props) {
         totalImported += r.imported;
         totalSkipped += r.skipped;
         allErrors.push(...r.errors);
+        (r.importedTickers ?? []).forEach((t: string) => allImportedTickers.add(t));
+        (r.skippedTickers ?? []).forEach((t: string) => allSkippedTickers.add(t));
       }
-      const combined = { imported: totalImported, skipped: totalSkipped, errors: allErrors };
+      const combined = {
+        imported: totalImported,
+        skipped: totalSkipped,
+        importedTickers: [...allImportedTickers].sort(),
+        skippedTickers: [...allSkippedTickers].sort(),
+        errors: allErrors,
+      };
       setResult(combined);
       setStep("success");
       if (totalImported > 0) {
@@ -92,6 +104,8 @@ export default function ImportModal({ onClose, onSuccess }: Props) {
     setDetectedBroker(detectBroker(content));
     try {
       const r = await submitOne(content);
+      r.importedTickers ??= [];
+      r.skippedTickers ??= [];
       setResult(r);
       setStep("success");
       if (r.imported > 0) {
@@ -241,41 +255,77 @@ export default function ImportModal({ onClose, onSuccess }: Props) {
 
           {/* ── Success state ── */}
           {step === "success" && result && (
-            <div className="flex flex-col items-center gap-4 py-4 text-center">
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
-                style={{ backgroundColor: "#10b98120" }}
-              >
-                ✓
-              </div>
-              <div>
+            <div className="flex flex-col gap-4 py-2">
+              {/* Header */}
+              <div className="flex flex-col items-center gap-2 text-center">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
+                  style={{ backgroundColor: "#10b98120" }}
+                >
+                  ✓
+                </div>
                 <p className="font-medium text-base" style={{ color: POSITIVE }}>
                   Import complete
                 </p>
                 {detectedBroker && (
-                  <p className="text-xs mt-1" style={{ color: TEXT_SECONDARY }}>
-                    {detectedBroker}
-                  </p>
+                  <p className="text-xs" style={{ color: TEXT_SECONDARY }}>{detectedBroker}</p>
                 )}
               </div>
-              <div
-                className="rounded-lg p-4 w-full text-sm flex gap-6 justify-center"
-                style={{ backgroundColor: BG_TERTIARY }}
-              >
-                <div>
-                  <p className="text-lg font-mono font-medium" style={{ color: POSITIVE }}>
-                    {result.imported}
+
+              {/* Imported tickers */}
+              {result.importedTickers.length > 0 && (
+                <div
+                  className="rounded-lg p-3 w-full"
+                  style={{ backgroundColor: BG_TERTIARY, border: `1px solid ${BORDER}` }}
+                >
+                  <p className="text-xs font-medium mb-2" style={{ color: POSITIVE }}>
+                    ↑ {result.imported} new transactions — {result.importedTickers.length} ticker{result.importedTickers.length !== 1 ? "s" : ""}
                   </p>
-                  <p style={{ color: TEXT_SECONDARY }}>imported</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {result.importedTickers.map((t) => (
+                      <span
+                        key={t}
+                        className="px-2 py-0.5 rounded text-xs font-mono font-medium"
+                        style={{ backgroundColor: "#10b98118", color: POSITIVE, border: "1px solid #10b98130" }}
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div>
-                  <p className="text-lg font-mono font-medium" style={{ color: TEXT_PRIMARY }}>
-                    {result.skipped}
+              )}
+
+              {/* Skipped tickers */}
+              {result.skippedTickers.length > 0 && (
+                <div
+                  className="rounded-lg p-3 w-full"
+                  style={{ backgroundColor: BG_TERTIARY, border: `1px solid ${BORDER}` }}
+                >
+                  <p className="text-xs font-medium mb-2" style={{ color: TEXT_SECONDARY }}>
+                    ↷ {result.skipped} already in DB — {result.skippedTickers.length} ticker{result.skippedTickers.length !== 1 ? "s" : ""}
                   </p>
-                  <p style={{ color: TEXT_SECONDARY }}>skipped (dupes)</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {result.skippedTickers.map((t) => (
+                      <span
+                        key={t}
+                        className="px-2 py-0.5 rounded text-xs font-mono"
+                        style={{ backgroundColor: "#ffffff08", color: TEXT_SECONDARY, border: `1px solid ${BORDER}` }}
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-              <div className="flex gap-3 w-full">
+              )}
+
+              {/* All dupes / nothing new */}
+              {result.imported === 0 && (
+                <p className="text-sm text-center" style={{ color: TEXT_SECONDARY }}>
+                  All {result.skipped} transactions already in DB
+                </p>
+              )}
+
+              <div className="flex gap-3 w-full mt-1">
                 <button
                   onClick={reset}
                   className="flex-1 rounded-lg py-2.5 text-sm font-medium transition-opacity hover:opacity-80"
