@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import ImportModal from "./ImportModal";
 
 const links = [
-  { href: "/",       label: "P&L"    },
-  { href: "/chains", label: "Chains" },
+  { href: "/",        label: "P&L"    },
+  { href: "/chains",  label: "Chains" },
+  { href: "/tickers", label: "Tickers" },
 ];
 
 const BROKERS = [
@@ -17,7 +18,85 @@ const BROKERS = [
   { value: "robinhood",  label: "Robinhood" },
 ];
 
-const YEARS = ["2025", "2026"];
+const YEAR_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "2025", label: "2025" },
+  { value: "2026", label: "2026" },
+];
+
+function FilterDropdown({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const activeLabel = options.find((o) => o.value === value)?.label ?? "All";
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => setIsOpen((o) => !o)}
+        className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-medium transition-colors"
+        style={{
+          backgroundColor: value ? "#00d4aa22" : "transparent",
+          border: "1px solid #1e2d3d",
+          color: "#e2e8f0",
+        }}
+      >
+        <span style={{ color: "#4b6080" }}>{label}:</span>
+        <span style={{ color: value ? "#00d4aa" : "#94a3b8" }}>{activeLabel}</span>
+        <span style={{ color: "#4b6080", fontSize: 8 }}>▼</span>
+      </button>
+      {isOpen && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 4px)",
+            right: 0,
+            backgroundColor: "#1a2234",
+            border: "1px solid #1e2d3d",
+            borderRadius: 6,
+            zIndex: 50,
+            minWidth: 120,
+            overflow: "hidden",
+          }}
+        >
+          {options.map((o) => (
+            <button
+              key={o.value}
+              onClick={() => { onChange(o.value); setIsOpen(false); }}
+              className="w-full text-left px-3 py-1.5 text-xs transition-colors hover:bg-[#00d4aa11]"
+              style={{
+                color: o.value === value ? "#00d4aa" : "#94a3b8",
+                backgroundColor: o.value === value ? "#00d4aa11" : "transparent",
+                display: "block",
+              }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function NavInner() {
   const pathname = usePathname();
@@ -105,57 +184,18 @@ function NavInner() {
             })}
           </div>
           <div className="flex items-center gap-3">
-            {/* Broker filter pills */}
-            <div
-              className="flex rounded overflow-hidden text-xs font-medium"
-              style={{ border: "1px solid #1e2d3d" }}
-            >
-              {BROKERS.map(({ value, label }) => (
-                <button
-                  key={value}
-                  onClick={() => setBroker(value)}
-                  className="px-3 py-1 transition-colors"
-                  style={{
-                    backgroundColor: activeBroker === value ? "#00d4aa22" : "transparent",
-                    color: activeBroker === value ? "#00d4aa" : "#4b6080",
-                    borderRight: value !== "robinhood" ? "1px solid #1e2d3d" : undefined,
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {/* Year filter pills */}
-            <div
-              className="flex rounded overflow-hidden text-xs font-medium"
-              style={{ border: "1px solid #1e2d3d" }}
-            >
-              <button
-                onClick={() => setYear("")}
-                className="px-3 py-1 transition-colors"
-                style={{
-                  backgroundColor: activeYear === "" ? "#00d4aa22" : "transparent",
-                  color: activeYear === "" ? "#00d4aa" : "#4b6080",
-                  borderRight: "1px solid #1e2d3d",
-                }}
-              >
-                All
-              </button>
-              {YEARS.map((y) => (
-                <button
-                  key={y}
-                  onClick={() => setYear(y)}
-                  className="px-3 py-1 transition-colors"
-                  style={{
-                    backgroundColor: activeYear === y ? "#00d4aa22" : "transparent",
-                    color: activeYear === y ? "#00d4aa" : "#4b6080",
-                    borderRight: y !== YEARS[YEARS.length - 1] ? "1px solid #1e2d3d" : undefined,
-                  }}
-                >
-                  {y}
-                </button>
-              ))}
-            </div>
+            <FilterDropdown
+              label="Brokerage"
+              options={BROKERS}
+              value={activeBroker}
+              onChange={setBroker}
+            />
+            <FilterDropdown
+              label="Year"
+              options={YEAR_OPTIONS}
+              value={activeYear}
+              onChange={setYear}
+            />
             <button
               onClick={() => setShowImport(true)}
               className="px-4 py-1.5 rounded text-sm font-medium transition-opacity hover:opacity-80"

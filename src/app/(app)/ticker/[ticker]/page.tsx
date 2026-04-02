@@ -7,6 +7,7 @@ import { useBrokerFilter } from "@/hooks/useBrokerFilter";
 import { useYearFilter } from "@/hooks/useYearFilter";
 import type { Chain, Leg } from "@/lib/types";
 import { StatusBadge, LegTypeBadge } from "@/components/ui/Badges";
+import { fmtRoiCompact } from "@/lib/roi";
 
 const C = {
   surface:  "#111827",
@@ -394,7 +395,7 @@ function CompletedWheelSummary({ chain }: { chain: Chain }) {
     { label: "Equity gain/loss",            value: fmtMoney(ws.equityGainLoss, true), bold: true, separator: true },
     { label: "Total profit (premium + equity)", value: fmtMoney(ws.totalReturn, true), bold: true },
     { label: "Capital deployed",            value: fmtMoney(ws.capitalDeployed), muted: true },
-    { label: "Return on capital",           value: `${ws.roiPct.toFixed(1)}%`, muted: true },
+    { label: "Return on capital",           value: fmtRoiCompact(chain.roiRates), muted: true },
     {
       label: "Time period",
       value: `${chain.days} days (${chain.openDate} → ${chain.closeDate ?? "?"})`,
@@ -667,8 +668,8 @@ function ChainsTable({ chains }: { chains: Chain[] }) {
                   <td className="px-4 py-2.5 font-mono text-sm" style={{ color: moneyColor(netPnl) }}>
                     {fmtMoney(netPnl, true)}
                   </td>
-                  <td className="px-4 py-2.5 font-mono text-sm" style={{ color: moneyColor(chain.roiPct) }}>
-                    {fmtPct(chain.roiPct)}
+                  <td className="px-4 py-2.5 font-mono text-xs" style={{ color: moneyColor(chain.roiPct) }}>
+                    {fmtRoiCompact(chain.roiRates)}
                   </td>
                 </tr>
               );

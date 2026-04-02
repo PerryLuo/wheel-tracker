@@ -1,7 +1,8 @@
 // Ported from Code.gs:427 buildChains()
 // Takes transactions for ONE underlying ticker, returns position chains.
 
-import type { Transaction, Chain, Leg, LegChainType, ChainStatus } from "./types";
+import type { Transaction, Chain, Leg, LegChainType, ChainStatus, RoiRates } from "./types";
+import { computeRoiRates } from "./roi";
 
 // Same-day sort priority: Assigned/Expired before BTC before STO before everything else.
 // Critical: assignment must be recorded before any same-day covered call sell.
@@ -47,7 +48,7 @@ interface BuildingChain {
   committedCapital: number;
   netPnl: number;
   roiPct: number;
-  annualizedRoiPct: number | null;
+  roiRates: RoiRates;
   currentStrike: number | null;
   currentExpiry: string | null;
   pendingPremium: number;
@@ -69,8 +70,7 @@ function finalizeChain(ch: BuildingChain, today: string): Chain {
   const days = Math.max(1, dateDiffDays(closeOrToday, ch.openDate));
   const roiPct =
     ch.committedCapital > 0 ? (ch.netPnl / ch.committedCapital) * 100 : 0;
-  const annualizedRoiPct =
-    ch.committedCapital > 0 ? roiPct * (365 / days) : null;
+  const roiRates = computeRoiRates(roiPct, days);
 
   return {
     chainId: ch.chainId,
@@ -83,7 +83,7 @@ function finalizeChain(ch: BuildingChain, today: string): Chain {
     committedCapital: ch.committedCapital,
     netPnl: ch.netPnl,
     roiPct,
-    annualizedRoiPct,
+    roiRates,
     currentStrike: ch.currentStrike,
     currentExpiry: ch.currentExpiry,
     pendingPremium: ch.pendingPremium,
@@ -158,7 +158,7 @@ export function buildChains(txs: Transaction[]): Chain[] {
           committedCapital: (tx.strike ?? 0) * contracts * 100,
           netPnl: amt,
           roiPct: 0,
-          annualizedRoiPct: null,
+          roiRates: { weekly: 0, monthly: 0, annual: 0 },
           currentStrike: tx.strike,
           currentExpiry: expiry,
           pendingPremium: Math.abs(amt),

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useBrokerFilter } from "@/hooks/useBrokerFilter";
 import { useYearFilter } from "@/hooks/useYearFilter";
-import type { Transaction, PeriodPnl } from "@/lib/types";
+import type { Transaction, PeriodPnl, Chain } from "@/lib/types";
+import { fmtRoiCompact, computeRoiRates } from "@/lib/roi";
 
 const C = {
   surface:  "#111827",
@@ -118,15 +119,30 @@ function KpiCard({
         {hasPeriod ? fmt(period.pnl) : "—"}
       </p>
       {hasPeriod && (
-        <p className="text-xs" style={{ color: C.muted }}>
-          Committed {fmtK(period.committed)} · ROI {fmtPct(period.pnl, period.committed)}
-        </p>
+        <div className="text-xs" style={{ color: C.muted }}>
+          <p>Committed {fmtK(period.committed)}</p>
+          {period.roiRates && (
+            <>
+              <p className="mt-1" style={{ color: C.muted, fontSize: 10 }}>ROI (W / M / Y)</p>
+              <p className="font-mono" style={{ color: moneyColor(period.pnl) }}>
+                {fmtRoiCompact(period.roiRates)}
+              </p>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-function YtdCard({ ytd, ytdCommitted, label }: { ytd: number; ytdCommitted: number; label: string }) {
+function YtdCard({ ytd, avgDeployedCommitted, label }: { ytd: number; avgDeployedCommitted: number; label: string }) {
+  const rawRoi = avgDeployedCommitted > 0 ? (ytd / avgDeployedCommitted) * 100 : 0;
+  // YTD spans from Jan 1 to today
+  const now = new Date();
+  const startOfYear = new Date(now.getUTCFullYear(), 0, 1);
+  const ytdDays = Math.max(1, Math.round((now.getTime() - startOfYear.getTime()) / 86400000));
+  const roiRates = avgDeployedCommitted > 0 ? computeRoiRates(rawRoi, ytdDays) : null;
+
   return (
     <div
       className="rounded-xl p-5 flex-1"
@@ -145,9 +161,17 @@ function YtdCard({ ytd, ytdCommitted, label }: { ytd: number; ytdCommitted: numb
       <p className="text-3xl font-mono font-medium mb-2" style={{ color: moneyColor(ytd) }}>
         {fmt(ytd)}
       </p>
-      <p className="text-xs" style={{ color: C.muted }}>
-        Committed {fmtK(ytdCommitted)} · ROI {fmtPct(ytd, ytdCommitted)}
-      </p>
+      <div className="text-xs" style={{ color: C.muted }}>
+        <p>Avg deployed {fmtK(avgDeployedCommitted)}</p>
+        {roiRates && (
+          <>
+            <p className="mt-1" style={{ color: C.muted, fontSize: 10 }}>ROI (W / M / Y)</p>
+            <p className="font-mono" style={{ color: moneyColor(ytd) }}>
+              {fmtRoiCompact(roiRates)}
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -155,7 +179,7 @@ function YtdCard({ ytd, ytdCommitted, label }: { ytd: number; ytdCommitted: numb
 // ── Breakdown table ───────────────────────────────────────────────────────────
 
 // Column widths: Name (fills remaining) | Committed | P&L | ROI% | Running Total
-const GRID = "1fr 88px 110px 65px 140px";
+const GRID = "1fr 88px 110px 185px 140px";
 
 // Within the same date: BTC before STO (so roll pairs display close → open)
 function txSortPriority(action: string): number {
@@ -251,19 +275,22 @@ function TickerRows({
   ticker,
   txs,
   periodKey,
+  chains,
+  periodDays,
   expanded,
   onToggle,
 }: {
   ticker: string;
   txs: Transaction[];
   periodKey: string;
+  chains: Chain[];
+  periodDays: number;
   expanded: boolean;
   onToggle: () => void;
 }) {
   const tickerPnl = txs.reduce((s, t) => s + t.amount, 0);
-  const tickerCommitted = txs
-    .filter((t) => t.action === "STO" && t.optionType === "PUT")
-    .reduce((s, t) => s + (t.strike ?? 0) * t.quantity * 100, 0);
+  // Committed capital from chains active in this period for this ticker
+  const tickerCommitted = chains.reduce((s, c) => s + c.committedCapital, 0);
 
   const rollIds = detectRolls(txs);
 
@@ -304,8 +331,8 @@ function TickerRows({
         <span className="font-mono text-sm font-semibold" style={{ color: moneyColor(tickerPnl) }}>
           {fmt(tickerPnl)}
         </span>
-        <span className="font-mono text-sm" style={{ color: tickerCommitted > 0 ? moneyColor(tickerPnl) : C.muted }}>
-          {fmtPct(tickerPnl, tickerCommitted)}
+        <span className="font-mono text-xs" style={{ color: tickerCommitted > 0 ? moneyColor(tickerPnl) : C.muted }}>
+          {tickerCommitted > 0 ? fmtRoiCompact(computeRoiRates((tickerPnl / tickerCommitted) * 100, periodDays)) : "—"}
         </span>
         <span />
       </div>
@@ -317,10 +344,12 @@ function TickerRows({
 function BreakdownTable({
   periods,
   transactions,
+  chains,
   type,
 }: {
   periods: PeriodPnl[];
   transactions: Transaction[];
+  chains: Chain[];
   type: "weekly" | "monthly";
 }) {
   const [expandedPeriods, setExpandedPeriods] = useState<Record<string, boolean>>({});
@@ -358,7 +387,7 @@ function BreakdownTable({
           padding: "8px 16px",
         }}
       >
-        {[colLabel, "Committed", "P&L", "ROI%", "Running Total"].map((h) => (
+        {[colLabel, "Committed", "P&L", "ROI (W / M / Y)", "Running Total"].map((h) => (
           <span
             key={h}
             className="text-xs uppercase"
@@ -397,8 +426,8 @@ function BreakdownTable({
                 <span className="font-mono text-sm font-semibold" style={{ color: moneyColor(p.pnl) }}>
                   {fmt(p.pnl)}
                 </span>
-                <span className="font-mono text-sm" style={{ color: p.committed > 0 ? moneyColor(p.pnl) : C.muted }}>
-                  {fmtPct(p.pnl, p.committed)}
+                <span className="font-mono text-xs" style={{ color: p.roiRates ? moneyColor(p.pnl) : C.muted }}>
+                  {p.roiRates ? fmtRoiCompact(p.roiRates) : "—"}
                 </span>
                 <span className="font-mono text-sm font-semibold" style={{ color: moneyColor(running) }}>
                   {fmt(running)}
@@ -408,12 +437,22 @@ function BreakdownTable({
               {/* Ticker sub-rows */}
               {isPeriodOpen && tickers.map((ticker) => {
                 const tickerKey = `${p.period}_${ticker}`;
+                const periodStart = type === "weekly" ? p.period : `${p.period}-01`;
+                const periodEnd = type === "weekly"
+                  ? (() => { const d = new Date(p.period + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + 6); return d.toISOString().slice(0, 10); })()
+                  : (() => { const [y, m] = p.period.split("-").map(Number); return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); })();
+                const periodDays = type === "weekly" ? 7 : new Date(Date.UTC(...p.period.split("-").map(Number) as [number, number], 0)).getUTCDate();
+                const tickerChains = chains.filter(
+                  (c) => c.ticker === ticker && c.openDate <= periodEnd && (c.closeDate == null || c.closeDate >= periodStart)
+                );
                 return (
                   <TickerRows
                     key={tickerKey}
                     ticker={ticker}
                     txs={periodMap[p.period][ticker]}
                     periodKey={p.period}
+                    chains={tickerChains}
+                    periodDays={periodDays}
                     expanded={!!expandedTickers[tickerKey]}
                     onToggle={() => toggleTicker(tickerKey)}
                   />
@@ -488,7 +527,7 @@ function PnlPageInner() {
     );
   }
 
-  const { weekly, monthly, ytd, ytdCommitted, transactions } = data;
+  const { weekly, monthly, ytd, avgDeployedCommitted, transactions } = data;
 
   // Most recent period = last element (arrays are sorted oldest → newest from API)
   const lastWeek  = weekly.length  ? weekly[weekly.length - 1]   : null;
@@ -559,7 +598,7 @@ function PnlPageInner() {
         <KpiCard label="Last Month" period={lastMonth} />
         <YtdCard
           ytd={ytd}
-          ytdCommitted={ytdCommitted}
+          avgDeployedCommitted={avgDeployedCommitted}
           label={year && year !== new Date().getUTCFullYear().toString() ? `${year} Total` : "YTD"}
         />
       </div>
@@ -603,7 +642,7 @@ function PnlPageInner() {
         {/* Table — padding inside the card */}
         <div className="p-4">
           {periods.length ? (
-            <BreakdownTable periods={periods} transactions={transactions} type={view} />
+            <BreakdownTable periods={periods} transactions={transactions} chains={data.chains} type={view} />
           ) : (
             <div className="py-8 text-center text-sm" style={{ color: C.muted }}>
               No data for this view.

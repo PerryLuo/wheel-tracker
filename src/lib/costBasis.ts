@@ -4,10 +4,27 @@ import type { Chain, WheelSummary } from "./types";
 
 // Cost basis per share for an assigned chain.
 // Formula: (Assignment Cost − Put Premiums Received + Put BTC Costs − Call Premiums Received + Call BTC Costs) ÷ shares
-// Returns null if the chain has never been assigned.
+// For OPEN chains: effective cost basis if assigned at current strike, net of premiums collected so far.
+// Returns null if chain has no assignment and no current strike.
 export function computeChainCostBasis(chain: Chain): number | null {
   const hasAssignment = chain.legs.some((l) => l.chainType === "assigned");
-  if (!hasAssignment) return null;
+  if (!hasAssignment) {
+    // OPEN chain: compute effective cost basis at current strike
+    if (chain.status === "OPEN" && chain.currentStrike != null && chain.contracts > 0) {
+      const shares = chain.contracts * 100;
+      let putIn = 0;
+      let putOut = 0;
+      for (const leg of chain.legs) {
+        if (leg.chainType === "open" || leg.chainType === "roll_open") {
+          putIn += Math.abs(leg.amount);
+        } else if (leg.chainType === "roll_close") {
+          putOut += Math.abs(leg.amount);
+        }
+      }
+      return (chain.currentStrike * shares - putIn + putOut) / shares;
+    }
+    return null;
+  }
 
   let assignmentCost = 0;
   let shares = 0;

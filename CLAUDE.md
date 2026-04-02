@@ -4,7 +4,7 @@
 
 A personal portfolio tracker for the **wheel options strategy** — selling cash-secured puts (CSP) and covered calls (CC) on individual stocks. Tracks position chains from open → assignment → covered calls → close/expiry, calculating accurate cost basis, P&L, and ROI per chain and per period.
 
-Migrating from Google Apps Script + Google Sheets to a modern full-stack web app.
+Originally migrated from Google Apps Script + Google Sheets. Migration is complete — now in active feature development.
 
 ## Tech Stack
 
@@ -36,9 +36,9 @@ Migrating from Google Apps Script + Google Sheets to a modern full-stack web app
 
 | File | Purpose |
 |------|---------|
-| `Code.gs` | **Source of truth** for all business logic — 2500 lines of working Apps Script |
-| `Index.html` | UI reference — dark theme, CSS variables, full component layout |
-| `MIGRATION_PLAN.md` | Full sprint plan (Sprint 0–7), DB schema, function migration map |
+| `Code.gs` | Legacy Apps Script reference (migration complete) |
+| `Index.html` | Legacy UI reference (migration complete) |
+| `MIGRATION_PLAN.md` | Product roadmap — completed sprints + upcoming features |
 | `sample-data/schwab-tna-sample.json` | TNA test data — roll detection, multiple chains |
 | `sample-data/schwab-pltr-sample.json` | PLTR test data — completed wheel, $901.36 P&L |
 | `sample-data/schwab-sofi-sample.json` | SOFI test data — open/assigned position |
@@ -82,7 +82,17 @@ Fonts: **DM Mono** (code/numbers) + **DM Sans** (UI text)
 | **4** | P&L landing page (`/`): KPI cards (Last Week/Month/YTD), two-level expandable weekly/monthly breakdown, roll detection, YTD stats | Complete |
 | **5** | Auth + multi-user (Supabase Google OAuth + RLS policies) | Complete |
 | **6** | Robinhood CSV parser, split fill aggregation, broker filter UI | Complete |
-| 7 | Polish + production (responsive layout, E2E tests, Vercel deploy) | Pending |
+| **8** | Options Calculator (CSP Scanner + CC Simulator) on ticker page | Complete |
+| **8a** | Open position cost basis + nav filter dropdowns | Complete |
+| **7** | Responsive & polish (mobile layout, error states, loading skeletons) | Pending |
+| **9** | Premium income charts (bar chart on P&L page) | Pending |
+| **10** | Manual trade entry (quick-add form) | Pending |
+| **11** | Expiration alerts & position warnings | Pending |
+| **12** | Win rate & strategy analytics | Pending |
+| **13** | Capital at risk dashboard | Pending |
+| **14** | Ticker page enrichment (campaign view) | Pending |
+| **15** | Export & reporting (CSV/PDF) | Pending |
+| **16** | Market data integration (live prices) | Pending |
 
 ## App Routes
 
@@ -92,7 +102,7 @@ Fonts: **DM Mono** (code/numbers) + **DM Sans** (UI text)
 | `/chains` | Chains view — ticker-grouped table with combined cost basis |
 | `/ticker/[ticker]` | Ticker detail — cost basis breakdown, chains, all transactions |
 | `/api/transactions` | GET — returns transactions, chains, period P&L, YTD stats |
-| `/api/import` | POST — accepts Schwab JSON or CSV, deduplicates, inserts to Supabase |
+| `/api/import` | POST — accepts Schwab JSON/CSV or Robinhood CSV, deduplicates, inserts to Supabase |
 
 ## Wheel Strategy Concepts
 

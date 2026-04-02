@@ -40,11 +40,14 @@ describe("computeChainCostBasis() — PLTR", () => {
     expect(cb).toBeCloseTo(138.99, 1);
   });
 
-  it("returns null for OPEN/non-assigned chains", () => {
+  it("returns effective cost basis for OPEN chains (strike minus net premiums)", () => {
     const tnaTxs = parseTicker("schwab-tna-sample.json", "TNA");
     const tnaChains = buildChains(tnaTxs);
     const openChain = tnaChains.find((c) => c.status === "OPEN");
-    expect(computeChainCostBasis(openChain!)).toBeNull();
+    const cb = computeChainCostBasis(openChain!);
+    // OPEN chain: should return effective CB (strike - net premiums per share), not null
+    expect(cb).not.toBeNull();
+    expect(cb).toBeCloseTo(43.14, 1);
   });
 });
 

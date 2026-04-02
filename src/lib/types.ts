@@ -47,6 +47,12 @@ export interface Leg {
   pnl: number;
 }
 
+export interface RoiRates {
+  weekly: number;   // rawROI × (7 / days)
+  monthly: number;  // rawROI × (30 / days)
+  annual: number;   // rawROI × (365 / days)
+}
+
 export interface WheelSummary {
   putPremium: number;
   callPremium: number;
@@ -71,7 +77,7 @@ export interface Chain {
   committedCapital: number;
   netPnl: number;
   roiPct: number;
-  annualizedRoiPct: number | null;
+  roiRates: RoiRates;
   currentStrike: number | null;
   currentExpiry: string | null;
   pendingPremium: number;
@@ -84,4 +90,5 @@ export interface PeriodPnl {
   period: string;  // "YYYY-MM-DD" (week start) or "YYYY-MM" (month)
   pnl: number;
   committed: number;
+  roiRates: RoiRates | null;
 }

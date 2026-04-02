@@ -11,6 +11,7 @@ export interface AppData {
   totalPnl: number;
   ytd: number;
   ytdCommitted: number;
+  avgDeployedCommitted: number;
 }
 
 export function useTransactions(broker?: string, year?: string) {

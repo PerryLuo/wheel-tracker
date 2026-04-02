@@ -1,8 +1,10 @@
-# Wheel Strategy Tracker — Migration Plan
-## Google Apps Script → Next.js + TypeScript + Supabase
+# Wheel Strategy Tracker — Product Roadmap
 
 **Created:** 2026-03-27
-**Goal:** Production-grade wheel strategy tracker with multi-broker support, CSV/JSON import, and polished UI
+**Updated:** 2026-04-01
+**Goal:** Production-grade wheel strategy tracker with multi-broker support, CSV/JSON import, analytics, and polished UI
+
+> **Note:** The original migration from Google Apps Script (Code.gs) to Next.js + TypeScript + Supabase is complete (Sprints 0–6). This document now serves as the product roadmap for new features and improvements.
 
 ---
 
@@ -22,221 +24,234 @@
 
 ---
 
-## Sprint 0 — Project Scaffold (Day 1) ✅
+## Completed Sprints
 
-**Goal:** Empty app runs locally and deploys to Vercel
+### Sprint 0 — Project Scaffold ✅
 
 - [x] Initialize Next.js 15 with TypeScript, Tailwind, App Router
-- [x] Set up project structure (layout, pages, lib, components, hooks, supabase migrations, tests/fixtures)
-- [x] Configure Tailwind dark theme (port existing CSS variables)
-- [x] Create Supabase project + connect
-- [x] Deploy empty app to Vercel
-- [x] Confirm: local dev (`pnpm dev`) + Vercel preview both work
+- [x] Set up project structure, Tailwind dark theme, Supabase connection
+- [x] Deploy to Vercel
 
-**Deliverable:** Empty dark-themed shell with nav showing "Chains" and "P&L" tabs
+### Sprint 1 — Types & Core Logic Port ✅
 
----
+- [x] `Transaction`, `Chain`, `Leg`, `WheelSummary`, `PeriodPnl` types
+- [x] `buildChains()`, `computeChainCostBasis()`, `computeWheelSummary()`, `computePeriodPnl()`
+- [x] 53 Vitest tests passing (TNA, PLTR, SOFI fixtures)
 
-## Sprint 1 — Types & Core Logic Port (Day 1-2) ✅
+### Sprint 2 — Database & Import ✅
 
-**Goal:** All calculation logic ported to TypeScript with tests passing
+- [x] Supabase schema with deterministic IDs, indexes
+- [x] Schwab JSON + CSV parsers with auto-detection
+- [x] `POST /api/import` + `GET /api/transactions` API routes
+- [x] Drag-and-drop import modal
 
-### 1a. Define Types (`src/lib/types.ts`)
-- [x] `Transaction` interface
-- [x] `Chain` interface (with costBasis, wheelSummary, currentStrike, currentExpiry, roiPct)
-- [x] `Leg` interface with `chainType` (LegChainType union)
-- [x] `WheelSummary` interface
-- [x] `PeriodPnl` interface
+### Sprint 3 — Chains View ✅
 
-### 1b. Port Calculation Logic
-- [x] `buildChains()` → `src/lib/chains.ts` (same-day priority, roll detection, CC attribution, call assignment/expiry)
-- [x] `computeChainCostBasis()` → `src/lib/costBasis.ts`
-- [x] `computeWheelSummary()` → `src/lib/costBasis.ts`
-- [x] `computePeriodPnl()` → `src/lib/pnl.ts`
-- [x] BTC CALL fix: clears `currentStrike`/`currentExpiry` (improvement over Code.gs)
+- [x] KPI cards, ChainTable with ticker grouping + combined CB
+- [x] Ticker detail page (`/ticker/[ticker]`) with cost basis breakdown
 
-### 1c. Write Tests
-- [x] 53 Vitest tests passing across chains, costBasis, parsers
-- [x] TNA: 4 chains, roll detection, combined CB $44.27/sh
-- [x] PLTR: COMPLETED chain, $901.36 total P&L
-- [x] SOFI: open/assigned position
+### Sprint 4 — P&L View ✅
 
-**Deliverable:** `pnpm test` passes, all core logic verified against known data
+- [x] KPI cards (Last Week/Month/YTD), weekly/monthly toggle
+- [x] Two-level expandable breakdown with roll detection
 
----
+### Sprint 5 — Auth & Multi-User ✅
 
-## Sprint 2 — Database & Import (Day 2-3) ✅
+- [x] Google OAuth, RLS policies, session validation, sign out
 
-**Goal:** Transactions stored in Supabase, import works via UI
+### Sprint 6 — Broker Expansion ✅
 
-### 2a. Database Schema
-- [x] `transactions` table with deterministic ID, all fields, broker + raw JSONB columns
-- [x] 3 indexes (user_id, underlying, date)
-- [x] Supabase migration file at `supabase/migrations/001_init.sql`
-- [ ] Row-level security (deferred to Sprint 5 with auth)
+- [x] Robinhood CSV parser, split fill aggregation
+- [x] Broker filter UI (now dropdown), year filter (now dropdown)
 
-### 2b. Parsers
-- [x] `src/lib/parsers/schwab.ts` — `parseTx()` for Schwab JSON format
-- [x] `src/lib/parsers/schwab.ts` — CSV parsing (Schwab CSV export format via PapaParse)
-- [x] `src/lib/parsers/normalize.ts` — `BrokerParser` interface + auto-detection
-- [x] Deduplicate on import via deterministic ID hash
+### Sprint 8 — Options Calculator ✅
 
-### 2c. API Routes
-- [x] `POST /api/import` — JSON or CSV, parses, deduplicates, upserts to Supabase
-- [x] `GET /api/transactions` — returns transactions, chains, weekly/monthly P&L, YTD stats, totalPnl
+- [x] CSP Scanner + Covered Call Simulator on ticker page
+- [x] OTM% display on CC cards
 
-### 2d. Import Modal UI
-- [x] Drag-and-drop file upload (.json and .csv)
-- [x] Paste JSON textarea
-- [x] Loading spinner, success/error feedback with import/skip counts
-- [x] Auto-detect Schwab JSON vs CSV
+### Sprint 8a — Open Position Cost Basis ✅
 
-**Deliverable:** Can import Schwab JSON + CSV, data persists in Supabase
+- [x] Effective cost basis for OPEN chains (strike − net premiums per share)
+- [x] Nav filters converted from pills to dropdowns (Brokerage / Year)
 
 ---
 
-## Sprint 3 — Chains View UI (Day 3-4) ✅
+## Upcoming Sprints
 
-**Goal:** Chains page matches current functionality with better UX
+### Sprint 7 — Responsive & Polish
 
-### 3a. Components
-- [x] `KpiCards.tsx` — total P&L, open positions, completed wheels
-- [x] `ChainTable.tsx` — two sections (Active / Closed), ticker-grouped with combined CB header rows
-  - Weighted-average combined cost basis badge per ticker
-  - Click ticker → navigate to `/ticker/[ticker]`
-  - Chain rows show: status, open/close date, contracts, strike (PUT assignment strike for ASSIGNED), expiry, committed, P&L, ROI
-  - BTC CALL bug fixed: assignment column now shows PUT strike, not call strike
-- [x] `StatusBadge` + `LegTypeBadge` in `src/components/ui/Badges.tsx`
+**Goal:** Mobile-friendly layout and production-ready quality
 
-### 3b. Ticker Detail View (`/ticker/[ticker]`)
-- [x] Back link to `/chains`
-- [x] Header: ticker, combined CB badge, chain count, committed, total net P&L
-- [x] Cost Basis Breakdown table (per assignment: date, contracts, shares, CB/sh, premiums collected; + combined total row)
-- [x] Position Chains table (chain ID, status, open/close, qty, capital, P&L, ROI)
-- [x] All Transactions table (deduplicated, newest-first, with LegTypeBadge)
+**Priority:** HIGH — traders check positions from their phone constantly
 
-**Deliverable:** Chains view fully functional at `/chains`, ticker detail at `/ticker/[ticker]`
+- [ ] Responsive design (tables → card layout on small screens)
+- [ ] Mobile-friendly nav (hamburger menu or collapsible filters)
+- [ ] Touch-friendly expand/collapse on chain rows
+- [ ] Error boundaries and graceful error states
+- [ ] Empty states (no data yet → show import CTA)
+- [ ] Loading skeletons for data fetching
+- [ ] Custom domain setup
+
+**Deliverable:** App is fully usable on mobile
 
 ---
 
-## Sprint 4 — P&L View UI (Day 4-5) ✅
+### Sprint 9 — Premium Income Charts
 
-**Goal:** Weekly/monthly P&L breakdown with drill-down
+**Goal:** Visual trend of income over time
 
-### 4a. KPI Cards (top of page)
-- [x] Last Week: committed, P&L, ROI%
-- [x] Last Month: committed, P&L, ROI%
-- [x] YTD: committed, P&L, ROI% (YTD stats computed in API route)
+**Priority:** HIGH — huge visual payoff, data already exists in PeriodPnl
 
-### 4b. Breakdown Table
-- [x] Weekly / Monthly toggle (defaults to weekly)
-- [x] Columns: Period, Committed, P&L, ROI%, Running Total
-- [x] Level 1 accordion: click period → show ticker subtotals
-- [x] Level 2 accordion: click ticker → show individual transactions
-  - Transactions sorted: BTC first, then Assigned/Expired, then STO (within same date)
-  - Roll detection: same-day BTC+STO pairs → ROLL badge shown, BTC appears before STO
-  - $0.00 amounts hidden; option type, strike, quantity shown on each row
-  - Ticker names link to `/ticker/[ticker]` detail page
-- [x] Running total accumulates chronologically (oldest→newest)
-- [x] P&L landing page is `/`; `/pnl` redirects to `/`; Chains is `/chains`
+- [ ] Bar chart on P&L page showing weekly/monthly premium income
+- [ ] Cumulative premium line overlay
+- [ ] Chart library integration (recharts or lightweight alternative)
+- [ ] Filter by broker/year carries through to charts
 
-**Deliverable:** P&L view fully functional as landing page with correct ROI + roll detection
+**Deliverable:** At-a-glance income trend on P&L page
 
 ---
 
-## Sprint 5 — Auth & Multi-User (Day 5-6) ✅
+### Sprint 10 — Manual Trade Entry
 
-**Goal:** Users can sign up, log in, and see only their data
+**Goal:** Quick-add trades without importing a full CSV file
 
-- [x] Supabase Auth setup (Google OAuth provider via Google Cloud Console)
-- [x] Login page (`/login`) with Google sign-in button, friendly copy
-- [x] `src/middleware.ts` — validates JWT on every request, redirects unauthenticated users to `/login`
-      Note: must be in `src/` directory (not project root) when using `src/` layout
-- [x] Route groups: `(app)` layout has Nav, `(auth)` layout is bare — login page has no Nav
-- [x] RLS enabled on transactions table (`002_auth.sql` migration applied via Supabase CLI)
-- [x] `user_id` backfilled on existing rows, FK constraint to `auth.users` with ON DELETE CASCADE
-- [x] Protected API routes — both `/api/transactions` and `/api/import` validate session via `getUser()`
-- [x] Import route stamps `user_id` on every inserted row
-- [x] Sign out button in Nav
-- [x] Verified with test user: RLS correctly isolates data between accounts
-- [ ] User settings page (deferred — not needed for personal use)
+**Priority:** HIGH — useful for corrections, quick adds between imports
 
-**Deliverable:** App is multi-user ready, data isolated per user, Google OAuth working
+- [ ] "Add Trade" button in nav or on chains page
+- [ ] Smart form that adapts fields based on action type (STO / BTC / Assigned / Expired)
+- [ ] Pre-fill ticker from current page context (e.g., on `/ticker/PLTR`)
+- [ ] Validate required fields (date, action, strike, quantity, premium)
+- [ ] Insert directly to Supabase with deduplication check
+
+**Deliverable:** Can log a single trade in under 10 seconds
 
 ---
 
-## Sprint 6 — Broker Expansion & CSV (Day 6-7)
+### Sprint 11 — Expiration Alerts & Position Warnings
 
-**Goal:** Support multiple broker formats
+**Goal:** Never miss an expiration or sell CCs below cost basis
 
-- [ ] `src/lib/parsers/ibkr.ts` — Interactive Brokers CSV/flex query parser
-- [ ] `src/lib/parsers/robinhood.ts` — Robinhood CSV parser
-- [ ] `src/lib/parsers/tastytrade.ts` — Tastytrade CSV parser
-- [ ] Import modal: broker auto-detection OR manual dropdown
-- [ ] Column mapping UI for unknown CSV formats (map columns to fields)
-- [ ] Test each parser with sample data
+**Priority:** HIGH — low effort, data already exists on chains
+
+- [ ] Banner/badge for positions expiring within 1–3 days
+- [ ] Warning indicator when a CC's strike is below the chain's cost basis
+- [ ] "Expiring Soon" section at top of chains page
+- [ ] DTE (days to expiration) column on open positions
+
+**Deliverable:** On-page alerts for positions needing attention
+
+---
+
+### Sprint 12 — Win Rate & Strategy Analytics
+
+**Goal:** Understand strategy effectiveness at a glance
+
+**Priority:** MEDIUM — all derivable from existing chain data
+
+- [ ] KPI cards: win rate %, avg premium per contract, avg days held
+- [ ] Win rate by ticker (% expired worthless vs assigned vs rolled)
+- [ ] Average rolls per chain
+- [ ] Best/worst performing tickers by total P&L and ROI
+- [ ] Annualized return calculation
+
+**Deliverable:** Analytics dashboard or enriched KPI section
+
+---
+
+### Sprint 13 — Capital at Risk Dashboard
+
+**Goal:** Real-time view of capital deployment
+
+**Priority:** MEDIUM — committedCapital already on chains
+
+- [ ] KPI card: total capital deployed across all open positions
+- [ ] Total premium collected vs capital at risk ratio
+- [ ] Capital utilization over time (chart)
+- [ ] Per-ticker capital breakdown
+
+**Deliverable:** Clear picture of exposure and capital efficiency
+
+---
+
+### Sprint 14 — Ticker Page Enrichment
+
+**Goal:** Make `/ticker/[ticker]` a full "campaign" view
+
+**Priority:** MEDIUM — ticker page exists but could be richer
+
+- [ ] Lifetime premium collected for ticker
+- [ ] Total ROI across all chains for ticker
+- [ ] Average days per wheel cycle
+- [ ] Chain history timeline visualization
+- [ ] Current position summary (shares held, current CB, unrealized P&L)
+
+**Deliverable:** Comprehensive per-ticker campaign dashboard
+
+---
+
+### Sprint 15 — Export & Reporting
+
+**Goal:** Get data out for taxes, record-keeping
+
+**Priority:** MEDIUM — especially valuable at tax time
+
+- [ ] Export filtered transactions to CSV
+- [ ] Export P&L summary to CSV/PDF
+- [ ] Tax lot report (cost basis, gains/losses by tax year)
+- [ ] Print-friendly view for P&L breakdown
+
+**Deliverable:** One-click export for any filtered view
+
+---
+
+### Sprint 16 — Market Data Integration
+
+**Goal:** Real-time prices for unrealized P&L and position monitoring
+
+**Priority:** LOW — requires 3rd party API (yahoo-finance2 or similar)
+
+- [ ] Current stock prices on open positions
+- [ ] Unrealized P&L on assigned chains (current price vs cost basis)
+- [ ] Options chain viewer (available strikes + premiums)
+- [ ] Break-even visualization on ticker page
+
+**Deliverable:** Live market data enriching open positions
+
+---
+
+### Sprint 17 — Additional Broker Support
+
+**Goal:** Support more brokerage export formats
+
+**Priority:** LOW — Schwab + Robinhood covers primary use
+
+- [ ] Interactive Brokers CSV/flex query parser
+- [ ] Tastytrade CSV parser
+- [ ] Column mapping UI for unknown CSV formats
+- [ ] Import modal: broker auto-detection improvements
 
 **Deliverable:** Import from 4+ brokers
 
 ---
 
-## Sprint 7 — Polish & Production (Day 7-8)
-
-**Goal:** Production-ready quality
-
-- [ ] Responsive design (mobile-friendly tables → card layout on small screens)
-- [ ] Error boundaries and graceful error states
-- [ ] Empty states (no data yet → show import CTA)
-- [ ] Loading skeletons for data fetching
-- [ ] Keyboard navigation (arrow keys in tables)
-- [ ] SEO + meta tags
-- [ ] Custom domain setup
-- [ ] Analytics (Vercel Analytics or Plausible)
-- [ ] Rate limiting on API routes
-- [ ] End-to-end test with Playwright (import → verify chains → verify P&L)
-
-**Deliverable:** Ship it
-
----
-
-## Future Sprints (Post-Launch)
-
-### Sprint 8 — Advanced Features
-- [ ] Portfolio-level dashboard (all tickers at a glance)
-- [ ] Dividend tracking (already in Schwab data)
-- [ ] Export to CSV/PDF
-- [ ] Dark/light theme toggle
-
-### Sprint 9 — Market Data Integration
-- [ ] Current stock prices (for unrealized P&L on open positions)
-- [ ] Options chain viewer (see available strikes)
-- [ ] Break-even visualization
-
-### Sprint 10 — Analytics
-- [ ] Win rate by ticker
-- [ ] Average days in trade
-- [ ] Best/worst performing wheels
-- [ ] Premium decay charts
-- [ ] Annualized return calculation
-
----
-
-## Migration Checklist (Code.gs → TypeScript)
+## Migration Checklist (Code.gs → TypeScript) — COMPLETE ✅
 
 | Function | Source | Target | Status |
 |----------|--------|--------|--------|
-| `parseTx()` | Code.gs:79 | `src/lib/parsers/schwab.ts` | ✅ Complete |
-| `buildChains()` | Code.gs:335 | `src/lib/chains.ts` | ✅ Complete |
-| `computeChainCostBasis()` | Code.gs:268 | `src/lib/costBasis.ts` | ✅ Complete |
-| `computeTickerCostBasis()` | Index.html (frontend) | `src/lib/costBasis.ts` | ✅ Complete |
-| `computeWheelSummary()` | NEW | `src/lib/costBasis.ts` | ✅ Complete |
-| `computePeriodPnl()` | Code.gs | `src/lib/pnl.ts` | ✅ Complete |
-| `getAppData()` | Code.gs | `src/app/api/transactions/route.ts` | ✅ Complete |
-| `importTransactions()` | Code.gs | `src/app/api/import/route.ts` | ✅ Complete |
-| `getOrCreateSheet()` | Code.gs | Supabase migration | ✅ Complete |
+| `parseTx()` | Code.gs:79 | `src/lib/parsers/schwab.ts` | ✅ |
+| `buildChains()` | Code.gs:335 | `src/lib/chains.ts` | ✅ |
+| `computeChainCostBasis()` | Code.gs:268 | `src/lib/costBasis.ts` | ✅ |
+| `computeTickerCostBasis()` | Index.html | `src/lib/costBasis.ts` | ✅ |
+| `computeWheelSummary()` | NEW | `src/lib/costBasis.ts` | ✅ |
+| `computePeriodPnl()` | Code.gs | `src/lib/pnl.ts` | ✅ |
+| `getAppData()` | Code.gs | `src/app/api/transactions/route.ts` | ✅ |
+| `importTransactions()` | Code.gs | `src/app/api/import/route.ts` | ✅ |
+| `getOrCreateSheet()` | Code.gs | Supabase migration | ✅ |
 
 ## Key Decisions
+
 - **No ORM** — use Supabase JS client directly (simple queries, not complex joins)
 - **Server Components** — fetch data on server, pass to client components for interactivity
 - **No state management library** — React useState + server components is sufficient for this app size
 - **Monorepo** — everything in one Next.js project, no separate backend
+- **Automated import over manual entry** — key differentiator vs competitors (optionwheeltracker.ai is manual-only)

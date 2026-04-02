@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Chain, Leg } from "@/lib/types";
 import { StatusBadge, LegTypeBadge } from "./ui/Badges";
+import { fmtRoiCompact } from "@/lib/roi";
 
 const C = {
   surface:  "#111827",
@@ -97,7 +98,7 @@ function WheelSummaryBlock({ chain }: { chain: Chain }) {
           ["Equity Gain/Loss", fmtMoney(ws.equityGainLoss, true)],
           ["Total Return",     fmtMoney(ws.totalReturn, true)],
           ["Capital Deployed", fmtMoney(ws.capitalDeployed)],
-          ["ROI",              fmtPct(ws.roiPct)],
+          ["ROI",              fmtRoiCompact(chain.roiRates)],
         ].map(([label, val]) => (
           <div key={label} className="flex justify-between">
             <span style={{ color: C.text2 }}>{label}</span>
@@ -218,8 +219,8 @@ function ChainRow({ chain, hideTicker }: { chain: Chain; hideTicker?: boolean })
         <td className="px-3 py-2.5 font-mono text-sm" style={{ color: moneyColor(netPnl) }}>
           {fmtMoney(netPnl, true)}
         </td>
-        <td className="px-3 py-2.5 font-mono text-sm" style={{ color: moneyColor(chain.roiPct) }}>
-          {fmtPct(chain.roiPct)}
+        <td className="px-3 py-2.5 font-mono text-xs" style={{ color: moneyColor(chain.roiPct) }}>
+          {fmtRoiCompact(chain.roiRates)}
         </td>
         <td className="px-3 py-2.5 text-sm" style={{ color: C.text2 }}>
           {chain.days}d
@@ -385,7 +386,7 @@ function Section({ title, chains }: { title: string; chains: Chain[] }) {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              {["Ticker", "Status", "Qty", "Current", "Capital", "Net P&L", "ROI", "Days"].map((h) => (
+              {["Ticker", "Status", "Qty", "Current", "Capital", "Net P&L", "ROI (W / M / Y)", "Days"].map((h) => (
                 <th
                   key={h}
                   className="px-3 py-2 text-left text-xs uppercase"

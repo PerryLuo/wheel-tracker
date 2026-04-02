@@ -70,8 +70,8 @@ export async function GET(req: NextRequest) {
       return aOpen - bOpen || b.openDate.localeCompare(a.openDate);
     });
 
-    const weekly = computePeriodPnl(transactions, "weekly");
-    const monthly = computePeriodPnl(transactions, "monthly");
+    const weekly = computePeriodPnl(transactions, chains, "weekly");
+    const monthly = computePeriodPnl(transactions, chains, "monthly");
 
     // YTD + totals (option txs only — exclude stock Buy/Sell)
     const currentYear = new Date().getUTCFullYear().toString();
@@ -83,11 +83,14 @@ export async function GET(req: NextRequest) {
 
     const totalPnl = optionTxs.reduce((s, t) => s + t.amount, 0);
     const ytd = ytdTxs.reduce((s, t) => s + t.amount, 0);
-    const ytdCommitted = ytdTxs
-      .filter((t) => t.action === "STO" && t.optionType === "PUT")
-      .reduce((s, t) => s + (t.strike ?? 0) * t.quantity * 100, 0);
 
-    return NextResponse.json({ transactions, chains, weekly, monthly, totalPnl, ytd, ytdCommitted });
+    // YTD committed: average of monthly committed values (not sum of STO PUTs)
+    const ytdMonthly = monthly.filter((m) => m.period.startsWith(selectedYear));
+    const avgDeployedCommitted = ytdMonthly.length > 0
+      ? ytdMonthly.reduce((s, m) => s + m.committed, 0) / ytdMonthly.length
+      : 0;
+
+    return NextResponse.json({ transactions, chains, weekly, monthly, totalPnl, ytd, ytdCommitted: avgDeployedCommitted, avgDeployedCommitted });
   } catch (e) {
     console.error("GET /api/transactions error:", e);
     return NextResponse.json(
