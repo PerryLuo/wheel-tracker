@@ -66,6 +66,23 @@ export function computePeriodPnl(
     }
   }
 
+  // Add equity gain/loss from completed wheels into the period they closed.
+  // This is (callStrike − putStrike) × shares — not a transaction amount, so
+  // it wouldn't appear in the option tx loop above.
+  for (const chain of chains) {
+    if (!chain.wheelSummary || !chain.closeDate) continue;
+    const equity = chain.wheelSummary.equityGainLoss;
+    if (equity === 0) continue;
+    const key =
+      type === "weekly"
+        ? getWeekStart(chain.closeDate)
+        : chain.closeDate.slice(0, 7);
+    if (!buckets[key]) buckets[key] = { pnl: 0 };
+    buckets[key].pnl += equity;
+    if (!periodTickers[key]) periodTickers[key] = new Set();
+    periodTickers[key].add(chain.ticker);
+  }
+
   return Object.keys(buckets)
     .sort()
     .map((period) => {

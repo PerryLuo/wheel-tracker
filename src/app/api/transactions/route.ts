@@ -81,8 +81,20 @@ export async function GET(req: NextRequest) {
     );
     const ytdTxs = optionTxs.filter((t) => t.date.startsWith(selectedYear));
 
-    const totalPnl = optionTxs.reduce((s, t) => s + t.amount, 0);
-    const ytd = ytdTxs.reduce((s, t) => s + t.amount, 0);
+    // Equity gain/loss: (callStrike − putStrike) × shares for each completed wheel.
+    // Not present as a transaction amount, so must be added separately.
+    const equityByCloseYear: Record<string, number> = {};
+    let totalEquity = 0;
+    for (const chain of chains) {
+      const equity = chain.wheelSummary?.equityGainLoss ?? 0;
+      if (equity === 0 || !chain.closeDate) continue;
+      totalEquity += equity;
+      const yr = chain.closeDate.slice(0, 4);
+      equityByCloseYear[yr] = (equityByCloseYear[yr] ?? 0) + equity;
+    }
+
+    const totalPnl = optionTxs.reduce((s, t) => s + t.amount, 0) + totalEquity;
+    const ytd = ytdTxs.reduce((s, t) => s + t.amount, 0) + (equityByCloseYear[selectedYear] ?? 0);
 
     // YTD committed: average of monthly committed values (not sum of STO PUTs)
     const ytdMonthly = monthly.filter((m) => m.period.startsWith(selectedYear));
