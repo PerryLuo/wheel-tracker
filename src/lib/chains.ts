@@ -96,11 +96,37 @@ function finalizeChain(ch: BuildingChain, today: string): Chain {
 export function buildChains(txs: Transaction[]): Chain[] {
   const chains: Chain[] = [];
   const openChains: Record<string, BuildingChain> = {};
-  const putExpiryMap: Record<string, string> = {};  // expiry → chainId
-  const callExpiryMap: Record<string, string> = {}; // expiry → chainId
+  const putExpiryMap: Record<string, string> = {};     // expiry → chainId
+  const callExpiryMap: Record<string, string[]> = {}; // expiry → chainId[] (multi-chain CCs)
   let chainCounter = 0;
 
   const today = new Date().toISOString().slice(0, 10);
+
+  // When a CC covers more contracts than any single ASSIGNED chain, distribute it
+  // across multiple chains proportionally (most-recently-opened first).
+  function selectChainsForCC(assigned: BuildingChain[], contracts: number): BuildingChain[] {
+    // 1. Single chain that exactly matches the CC contract count
+    const exact = assigned.find((c) => c.contracts === contracts);
+    if (exact) return [exact];
+
+    // 2. Greedily fill multiple chains (most recently opened first)
+    const sorted = [...assigned].sort((a, b) =>
+      b.openDate.localeCompare(a.openDate)
+    );
+    const selected: BuildingChain[] = [];
+    let remaining = contracts;
+    for (const c of sorted) {
+      if (remaining <= 0) break;
+      if (c.contracts <= remaining) {
+        selected.push(c);
+        remaining -= c.contracts;
+      }
+    }
+    if (remaining === 0) return selected;
+
+    // 3. Fall back: most recently opened chain
+    return [sorted[0]];
+  }
 
   // Sort: by date asc, then by action priority within same date
   const sorted = txs.slice().sort((a, b) => {
@@ -218,18 +244,22 @@ export function buildChains(txs: Transaction[]): Chain[] {
 
     // ── ASSIGNED (CALL) — stock called away, wheel complete ─────
     if (action === "Assigned" && optionType === "CALL") {
-      const cid = callExpiryMap[expiry];
-      if (!cid || !openChains[cid]) return true;
-      const ch = openChains[cid];
-      ch.legs.push(makeLeg(tx, "call_assigned", amt));
-      ch.status = "COMPLETED";
-      ch.closeDate = tx.date;
-      ch.pendingPremium = 0;
-      ch.currentStrike = null;
-      ch.currentExpiry = null;
-      chains.push(finalizeChain(ch, today));
+      const cids = callExpiryMap[expiry];
+      if (!cids?.length) return true;
+      const validChains = cids.map((cid) => openChains[cid]).filter(Boolean);
+      const totalContracts = validChains.reduce((s, c) => s + c.contracts, 0);
+      for (const ch of validChains) {
+        const proportion = totalContracts > 0 ? ch.contracts / totalContracts : 1 / validChains.length;
+        ch.legs.push(makeLeg(tx, "call_assigned", amt * proportion));
+        ch.status = "COMPLETED";
+        ch.closeDate = tx.date;
+        ch.pendingPremium = 0;
+        ch.currentStrike = null;
+        ch.currentExpiry = null;
+        chains.push(finalizeChain(ch, today));
+        delete openChains[ch.chainId];
+      }
       delete callExpiryMap[expiry];
-      delete openChains[cid];
       return true;
     }
 
@@ -237,38 +267,50 @@ export function buildChains(txs: Transaction[]): Chain[] {
     if (action === "STO" && optionType === "CALL") {
       const assigned = getAssignedChains();
       if (!assigned.length) return true;
-      const owner = assigned.reduce((latest, c) =>
-        c.openDate > latest.openDate ? c : latest
-      );
-      owner.netPnl += amt;
-      owner.pendingPremium += Math.abs(amt);
-      owner.legs.push(makeLeg(tx, "call_open", amt));
-      owner.currentStrike = tx.strike;
-      owner.currentExpiry = expiry;
-      callExpiryMap[expiry] = owner.chainId;
+      const owners = selectChainsForCC(assigned, contracts);
+      const totalOwnerContracts = owners.reduce((s, c) => s + c.contracts, 0);
+      if (!callExpiryMap[expiry]) callExpiryMap[expiry] = [];
+      for (const owner of owners) {
+        const proportion = totalOwnerContracts > 0 ? owner.contracts / totalOwnerContracts : 1 / owners.length;
+        const ownerAmt = amt * proportion;
+        owner.netPnl += ownerAmt;
+        owner.pendingPremium += Math.abs(ownerAmt);
+        owner.legs.push(makeLeg(tx, "call_open", ownerAmt));
+        owner.currentStrike = tx.strike;
+        owner.currentExpiry = expiry;
+        callExpiryMap[expiry].push(owner.chainId);
+      }
       return true;
     }
 
     // ── BUY TO CLOSE (CALL) ─────────────────────────────────────
     if (action === "BTC" && optionType === "CALL") {
-      const cid = callExpiryMap[expiry];
-      if (!cid || !openChains[cid]) return true;
-      const ch = openChains[cid];
-      ch.netPnl += amt;
-      ch.legs.push(makeLeg(tx, "call_close", amt));
-      ch.currentStrike = null;
-      ch.currentExpiry = null;
+      const cids = callExpiryMap[expiry];
+      if (!cids?.length) return true;
+      const validChains = cids.map((cid) => openChains[cid]).filter(Boolean);
+      const totalContracts = validChains.reduce((s, c) => s + c.contracts, 0);
+      for (const ch of validChains) {
+        const proportion = totalContracts > 0 ? ch.contracts / totalContracts : 1 / validChains.length;
+        ch.netPnl += amt * proportion;
+        ch.legs.push(makeLeg(tx, "call_close", amt * proportion));
+        ch.currentStrike = null;
+        ch.currentExpiry = null;
+      }
       delete callExpiryMap[expiry];
       return true;
     }
 
     // ── EXPIRED (CALL) ───────────────────────────────────────────
     if (action === "Expired" && optionType === "CALL") {
-      const cid = callExpiryMap[expiry];
-      if (!cid || !openChains[cid]) return true;
-      openChains[cid].legs.push(makeLeg(tx, "call_expired", 0));
-      openChains[cid].currentExpiry = null;
-      openChains[cid].currentStrike = null;
+      const cids = callExpiryMap[expiry];
+      if (!cids?.length) return true;
+      for (const cid of cids) {
+        if (openChains[cid]) {
+          openChains[cid].legs.push(makeLeg(tx, "call_expired", 0));
+          openChains[cid].currentExpiry = null;
+          openChains[cid].currentStrike = null;
+        }
+      }
       delete callExpiryMap[expiry];
       return true;
     }
