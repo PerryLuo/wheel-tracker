@@ -7,9 +7,10 @@ import { createBrowserClient } from "@supabase/ssr";
 import ImportModal from "./ImportModal";
 
 const links = [
-  { href: "/",        label: "P&L"    },
-  { href: "/chains",  label: "Chains" },
-  { href: "/tickers", label: "Tickers" },
+  { href: "/",          label: "P&L"      },
+  { href: "/chains",    label: "Chains"   },
+  { href: "/tickers",   label: "Tickers"  },
+  { href: "/screener",  label: "Screener" },
 ];
 
 const BROKERS = [
