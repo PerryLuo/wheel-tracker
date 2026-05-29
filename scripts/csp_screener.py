@@ -40,9 +40,19 @@ EXCLUDED_INDUSTRIES = {
 
 # ─── STAGE 1: BUILD UNIVERSE ──────────────────────────────────────────────────
 
+_WIKI_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; CSPScreener/1.0; +https://github.com)"}
+
+
+def _wiki_tables(url: str) -> list:
+    """Fetch Wikipedia page with a browser-like User-Agent to avoid 403s."""
+    resp = requests.get(url, headers=_WIKI_HEADERS, timeout=20)
+    resp.raise_for_status()
+    return pd.read_html(resp.text)
+
+
 def fetch_sp500() -> pd.DataFrame:
     try:
-        df = pd.read_html("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")[0]
+        df = _wiki_tables("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies")[0]
         return df[["Symbol", "GICS Sub-Industry"]].rename(
             columns={"Symbol": "symbol", "GICS Sub-Industry": "industry"}
         )
@@ -53,7 +63,7 @@ def fetch_sp500() -> pd.DataFrame:
 
 def fetch_nasdaq100() -> pd.DataFrame:
     try:
-        tables = pd.read_html("https://en.wikipedia.org/wiki/Nasdaq-100")
+        tables = _wiki_tables("https://en.wikipedia.org/wiki/Nasdaq-100")
         for t in tables:
             for col in ("Ticker", "Symbol"):
                 if col in t.columns:
