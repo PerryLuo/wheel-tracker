@@ -3,6 +3,7 @@
 CSP Screener — nightly pipeline
 Stages: Universe → Price/Volume → Event Risk → Options Chain (Polygon) → Score & Rank
 """
+import json
 import os
 import sys
 import time
@@ -263,6 +264,8 @@ def screen_options(tickers: list[str], prices: dict[str, float]) -> list[dict]:
     date_to   = (today + timedelta(days=45)).isoformat()
 
     candidates: list[dict] = []
+    # Track rejection reasons for first ticker diagnosis
+    _diag_done = False
 
     for i, sym in enumerate(tickers):
         if i % 20 == 0:
@@ -280,6 +283,18 @@ def screen_options(tickers: list[str], prices: dict[str, float]) -> list[dict]:
             opts = _get_options_snapshot(sym, date_from, date_to, strike_min, strike_max)
             time.sleep(0.1)  # gentle pacing
 
+            # Diagnose the first ticker with results so we can see API structure
+            nonlocal_diag = not _diag_done and len(opts) > 0
+            if nonlocal_diag:
+                _diag_done = True
+                log.info(f"DIAG [{sym}] {len(opts)} contracts returned, price={stock_price:.2f} "
+                         f"strike_range=[{strike_min:.2f},{strike_max:.2f}] "
+                         f"exp_range=[{date_from},{date_to}]")
+                log.info(f"DIAG first contract keys: {list(opts[0].keys())}")
+                log.info(f"DIAG first contract: {json.dumps(opts[0], default=str)[:1200]}")
+
+            reject_counts: dict[str, int] = {}
+
             for opt in opts:
                 details = opt.get("details") or {}
                 greeks  = opt.get("greeks")   or {}
@@ -288,43 +303,50 @@ def screen_options(tickers: list[str], prices: dict[str, float]) -> list[dict]:
 
                 strike = details.get("strike_price")
                 if not strike:
+                    reject_counts["no_strike"] = reject_counts.get("no_strike", 0) + 1
                     continue
                 strike = float(strike)
 
                 bid = float(quote.get("bid") or 0)
                 ask = float(quote.get("ask") or 0)
                 if bid < 0.50:
+                    reject_counts["bid<0.50"] = reject_counts.get("bid<0.50", 0) + 1
                     continue
 
                 oi = int(opt.get("open_interest") or 0)
                 if oi < 100:
+                    reject_counts["oi<100"] = reject_counts.get("oi<100", 0) + 1
                     continue
 
                 mid = (bid + ask) / 2 if ask > 0 else bid
                 if mid > 0 and (ask - bid) / mid > 0.10:
+                    reject_counts["spread>10%"] = reject_counts.get("spread>10%", 0) + 1
                     continue
 
                 delta = greeks.get("delta")
                 iv    = opt.get("implied_volatility")
 
                 if delta is None or not (-0.20 <= float(delta) <= -0.10):
+                    reject_counts["delta_oob"] = reject_counts.get("delta_oob", 0) + 1
                     continue
                 if not iv or float(iv) < 0.20:
+                    reject_counts["iv<20%"] = reject_counts.get("iv<20%", 0) + 1
                     continue
 
                 delta = float(delta)
                 iv    = float(iv)
 
-                # Use Polygon's live underlying price if available, else fall back to yfinance price
                 live_price = underlying.get("price")
                 ref_price  = float(live_price) if live_price else stock_price
 
                 cushion = (ref_price - strike) / ref_price * 100
                 if cushion < 5:
+                    reject_counts["cushion<5%"] = reject_counts.get("cushion<5%", 0) + 1
                     continue
 
                 premium_yield = (bid / strike) * 100
                 if premium_yield < 1.0:
+                    reject_counts["yield<1%"] = reject_counts.get("yield<1%", 0) + 1
                     continue
 
                 exp_str = details.get("expiration_date", "")
@@ -342,6 +364,9 @@ def screen_options(tickers: list[str], prices: dict[str, float]) -> list[dict]:
                     "expiration":        exp_str,
                     "current_iv":        iv * 100,
                 })
+
+            if nonlocal_diag and reject_counts:
+                log.info(f"DIAG [{sym}] rejection counts: {reject_counts}")
 
         except Exception as e:
             log.warning(f"Error screening {sym}: {e}")
