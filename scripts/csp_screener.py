@@ -199,24 +199,30 @@ def filter_event_risk(tickers: list[str]) -> list[str]:
 
 # ─── STAGE 4: OPTIONS CHAIN VIA MASSIVE ──────────────────────────────────────
 
+_api_diag_logged = False  # log first raw API response once at INFO level
+
 def _massive_get(path: str, params: dict) -> dict | None:
+    global _api_diag_logged
     try:
-        r = requests.get(
-            f"{MASSIVE_BASE}{path}",
-            headers=MASSIVE_HEADERS,
-            params=params,
-            timeout=15,
-        )
+        full_url = f"{MASSIVE_BASE}{path}"
+        r = requests.get(full_url, headers=MASSIVE_HEADERS, params=params, timeout=15)
+        if not _api_diag_logged:
+            _api_diag_logged = True
+            log.info(f"API DIAG url={full_url} params={params} status={r.status_code} body={r.text[:400]}")
         if r.status_code == 429:
             log.warning("Massive rate limit hit — sleeping 12s")
             time.sleep(12)
-            r = requests.get(f"{MASSIVE_BASE}{path}", headers=MASSIVE_HEADERS, params=params, timeout=15)
+            r = requests.get(full_url, headers=MASSIVE_HEADERS, params=params, timeout=15)
         if r.status_code == 200:
-            return r.json()
-        log.debug(f"Massive {path} → {r.status_code}: {r.text[:120]}")
+            body = r.json()
+            results = body.get("results") or []
+            if not _api_diag_logged or len(results) > 0:
+                log.info(f"API DIAG {path} → 200, results={len(results)}, status_field={body.get('status')}, next_url={'yes' if body.get('next_url') else 'no'}")
+            return body
+        log.warning(f"Massive {path} → {r.status_code}: {r.text[:200]}")
         return None
     except Exception as e:
-        log.debug(f"Massive request error ({path}): {e}")
+        log.warning(f"Massive request error ({path}): {e}")
         return None
 
 
