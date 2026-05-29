@@ -180,7 +180,7 @@ function ScreenerPageInner() {
             CSP Screener
           </h1>
           <p className="text-sm mt-0.5" style={{ color: C.muted }}>
-            Top cash-secured put opportunities · Updated nightly at 8 PM PDT
+            Top short-term cash-secured put opportunities · Updated nightly at 8 PM PDT
           </p>
         </div>
         {runDate && (
@@ -209,7 +209,7 @@ function ScreenerPageInner() {
       >
         {[
           "Delta −0.10 to −0.20",
-          "DTE 21–45 days",
+          "DTE 3–14 days",
           "Cushion > 5%",
           "Monthly yield > 1%",
           "OI > 100",

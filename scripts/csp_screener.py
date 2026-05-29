@@ -208,8 +208,8 @@ def _bs_put_delta(S: float, K: float, T: float, sigma: float) -> float:
 
 def screen_options(tickers: list[str], prices: dict[str, float]) -> list[dict]:
     today     = date.today()
-    date_from = today + timedelta(days=21)
-    date_to   = today + timedelta(days=45)
+    date_from = today + timedelta(days=3)
+    date_to   = today + timedelta(days=14)
 
     candidates: list[dict] = []
 
@@ -302,9 +302,9 @@ def screen_options(tickers: list[str], prices: dict[str, float]) -> list[dict]:
 # ─── STAGE 5: SCORE AND RANK ──────────────────────────────────────────────────
 
 def _dte_score(dte: int) -> float:
-    if 30 <= dte <= 45:
+    if 7 <= dte <= 14:
         return 1.0
-    if 21 <= dte < 30:
+    if 3 <= dte < 7:
         return 0.7
     return 0.4
 
