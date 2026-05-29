@@ -10,6 +10,8 @@ import logging
 from datetime import date, timedelta, datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from io import StringIO
+
 import requests
 import yfinance as yf
 import pandas as pd
@@ -47,7 +49,7 @@ def _wiki_tables(url: str) -> list:
     """Fetch Wikipedia page with a browser-like User-Agent to avoid 403s."""
     resp = requests.get(url, headers=_WIKI_HEADERS, timeout=20)
     resp.raise_for_status()
-    return pd.read_html(resp.text)
+    return pd.read_html(StringIO(resp.text))
 
 
 def fetch_sp500() -> pd.DataFrame:
