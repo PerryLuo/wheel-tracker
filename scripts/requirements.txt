@@ -2,5 +2,6 @@ yfinance>=0.2.40
 pandas>=2.0.0
 requests>=2.31.0
 supabase>=2.3.0
+scipy>=1.10.0
 lxml>=4.9.0
 html5lib>=1.1

@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
 CSP Screener — nightly pipeline
-Stages: Universe → Price/Volume → Event Risk → Options Chain (Polygon) → Score & Rank
+Stages: Universe → Price/Volume → Event Risk → Options Chain (yfinance) → Score & Rank
 """
-import json
+import math
 import os
 import sys
 import time
 import logging
 from datetime import date, timedelta, datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
 from io import StringIO
 
 import requests
 import yfinance as yf
 import pandas as pd
+from scipy.stats import norm
 from supabase import create_client
 
 logging.basicConfig(
@@ -25,12 +25,10 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-MASSIVE_API_KEY = os.environ["MASSIVE_API_KEY"]
-MASSIVE_BASE    = "https://api.massive.com"
-MASSIVE_HEADERS = {"Authorization": f"Bearer {MASSIVE_API_KEY}"}
-
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+
+RISK_FREE_RATE = 0.045  # approximate current risk-free rate for Black-Scholes
 
 EXCLUDED_INDUSTRIES = {
     "Biotechnology",
@@ -47,7 +45,6 @@ _WIKI_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; CSPScreener/1.0; +https
 
 
 def _wiki_tables(url: str) -> list:
-    """Fetch Wikipedia page with a browser-like User-Agent to avoid 403s."""
     resp = requests.get(url, headers=_WIKI_HEADERS, timeout=20)
     resp.raise_for_status()
     return pd.read_html(StringIO(resp.text))
@@ -91,10 +88,9 @@ def build_universe() -> list[str]:
     return tickers
 
 
-# ─── STAGE 1b: PRICE / VOLUME FILTER ─────────────────────────────────────────
+# ─── STAGE 2: PRICE / VOLUME FILTER ──────────────────────────────────────────
 
 def filter_by_price_volume(tickers: list[str]) -> tuple[list[str], dict[str, float]]:
-    """Returns (survivors, {symbol: latest_close}) for use in Stage 4."""
     log.info("Downloading 45-day OHLCV data via yfinance …")
     try:
         data = yf.download(
@@ -114,10 +110,10 @@ def filter_by_price_volume(tickers: list[str]) -> tuple[list[str], dict[str, flo
     close  = data["Close"]
     volume = data["Volume"]
 
-    latest  = close.iloc[-1]
-    avg_vol = volume.tail(30).mean()
+    latest        = close.iloc[-1]
+    avg_vol       = volume.tail(30).mean()
     price_30d_ago = close.iloc[-30] if len(close) >= 30 else close.iloc[0]
-    ret_30d = (latest - price_30d_ago) / price_30d_ago.replace(0, float("nan"))
+    ret_30d       = (latest - price_30d_ago) / price_30d_ago.replace(0, float("nan"))
 
     mask = (
         (latest  >= 15)  &
@@ -197,81 +193,25 @@ def filter_event_risk(tickers: list[str]) -> list[str]:
     return survivors
 
 
-# ─── STAGE 4: OPTIONS CHAIN VIA MASSIVE ──────────────────────────────────────
+# ─── STAGE 4: OPTIONS CHAIN VIA YFINANCE ─────────────────────────────────────
 
-_api_diag_logged = False  # log first raw API response once at INFO level
-
-def _massive_get(path: str, params: dict) -> dict | None:
-    global _api_diag_logged
+def _bs_put_delta(S: float, K: float, T: float, sigma: float) -> float:
+    """Black-Scholes delta for a European put. Returns value in [-1, 0]."""
+    if T <= 0 or sigma <= 0 or S <= 0 or K <= 0:
+        return 0.0
     try:
-        full_url = f"{MASSIVE_BASE}{path}"
-        r = requests.get(full_url, headers=MASSIVE_HEADERS, params=params, timeout=15)
-        if not _api_diag_logged:
-            _api_diag_logged = True
-            log.info(f"API DIAG url={full_url} params={params} status={r.status_code} body={r.text[:400]}")
-        if r.status_code == 429:
-            log.warning("Massive rate limit hit — sleeping 12s")
-            time.sleep(12)
-            r = requests.get(full_url, headers=MASSIVE_HEADERS, params=params, timeout=15)
-        if r.status_code == 200:
-            body = r.json()
-            results = body.get("results") or []
-            if not _api_diag_logged or len(results) > 0:
-                log.info(f"API DIAG {path} → 200, results={len(results)}, status_field={body.get('status')}, next_url={'yes' if body.get('next_url') else 'no'}")
-            return body
-        log.warning(f"Massive {path} → {r.status_code}: {r.text[:200]}")
-        return None
-    except Exception as e:
-        log.warning(f"Massive request error ({path}): {e}")
-        return None
-
-
-def _get_options_snapshot(
-    symbol: str,
-    date_from: str,
-    date_to: str,
-    strike_min: float,
-    strike_max: float,
-) -> list[dict]:
-    """Fetches all put snapshots for `symbol` within the expiration window, paginating as needed."""
-    params = {
-        "contract_type":      "put",
-        "expiration_date.gte": date_from,
-        "expiration_date.lte": date_to,
-        "strike_price.gte":   round(strike_min, 2),
-        "strike_price.lte":   round(strike_max, 2),
-        "limit":              250,
-    }
-    all_results: list[dict] = []
-    url = f"/v3/snapshot/options/{symbol}"
-
-    while True:
-        data = _massive_get(url, params)
-        if not data:
-            break
-        all_results.extend(data.get("results") or [])
-
-        # Paginate via next_url cursor
-        next_url = data.get("next_url")
-        if not next_url:
-            break
-        # Extract cursor from next_url and re-use the same path
-        cursor = next_url.split("cursor=")[-1].split("&")[0] if "cursor=" in next_url else None
-        if not cursor:
-            break
-        params = {"cursor": cursor}
-
-    return all_results
+        d1 = (math.log(S / K) + (RISK_FREE_RATE + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
+        return float(norm.cdf(d1) - 1.0)
+    except Exception:
+        return 0.0
 
 
 def screen_options(tickers: list[str], prices: dict[str, float]) -> list[dict]:
     today     = date.today()
-    date_from = (today + timedelta(days=21)).isoformat()
-    date_to   = (today + timedelta(days=45)).isoformat()
+    date_from = today + timedelta(days=21)
+    date_to   = today + timedelta(days=45)
 
     candidates: list[dict] = []
-    # Track rejection reasons for first ticker diagnosis
-    _diag_done = False
 
     for i, sym in enumerate(tickers):
         if i % 20 == 0:
@@ -281,86 +221,68 @@ def screen_options(tickers: list[str], prices: dict[str, float]) -> list[dict]:
         if not stock_price:
             continue
 
-        # Pre-filter strikes to the delta -0.10…-0.20 neighbourhood (~5–20% OTM)
         strike_min = stock_price * 0.78
         strike_max = stock_price * 0.97
 
         try:
-            opts = _get_options_snapshot(sym, date_from, date_to, strike_min, strike_max)
-            time.sleep(0.1)  # gentle pacing
+            ticker      = yf.Ticker(sym)
+            expirations = ticker.options  # tuple of date strings
+            if not expirations:
+                continue
+        except Exception:
+            continue
 
-            # Diagnose the first ticker with results so we can see API structure
-            nonlocal_diag = not _diag_done and len(opts) > 0
-            if nonlocal_diag:
-                _diag_done = True
-                log.info(f"DIAG [{sym}] {len(opts)} contracts returned, price={stock_price:.2f} "
-                         f"strike_range=[{strike_min:.2f},{strike_max:.2f}] "
-                         f"exp_range=[{date_from},{date_to}]")
-                log.info(f"DIAG first contract keys: {list(opts[0].keys())}")
-                log.info(f"DIAG first contract: {json.dumps(opts[0], default=str)[:1200]}")
+        for exp_str in expirations:
+            try:
+                exp_date = date.fromisoformat(exp_str)
+            except ValueError:
+                continue
+            if not (date_from <= exp_date <= date_to):
+                continue
 
-            reject_counts: dict[str, int] = {}
+            dte = (exp_date - today).days
+            T   = dte / 365.0
 
-            for opt in opts:
-                details = opt.get("details") or {}
-                greeks  = opt.get("greeks")   or {}
-                quote   = opt.get("last_quote") or {}
-                underlying = opt.get("underlying_asset") or {}
+            try:
+                puts = ticker.option_chain(exp_str).puts
+                time.sleep(0.05)
+            except Exception:
+                continue
 
-                strike = details.get("strike_price")
-                if not strike:
-                    reject_counts["no_strike"] = reject_counts.get("no_strike", 0) + 1
-                    continue
-                strike = float(strike)
+            puts = puts[(puts["strike"] >= strike_min) & (puts["strike"] <= strike_max)]
 
-                bid = float(quote.get("bid") or 0)
-                ask = float(quote.get("ask") or 0)
+            for _, row in puts.iterrows():
+                strike = float(row["strike"])
+                bid    = float(row.get("bid") or 0)
+                ask    = float(row.get("ask") or 0)
+                oi     = int(row.get("openInterest") or 0)
+                iv     = float(row.get("impliedVolatility") or 0)
+
                 if bid < 0.50:
-                    reject_counts["bid<0.50"] = reject_counts.get("bid<0.50", 0) + 1
                     continue
-
-                oi = int(opt.get("open_interest") or 0)
                 if oi < 100:
-                    reject_counts["oi<100"] = reject_counts.get("oi<100", 0) + 1
                     continue
-
                 mid = (bid + ask) / 2 if ask > 0 else bid
                 if mid > 0 and (ask - bid) / mid > 0.10:
-                    reject_counts["spread>10%"] = reject_counts.get("spread>10%", 0) + 1
+                    continue
+                if iv < 0.20:
                     continue
 
-                delta = greeks.get("delta")
-                iv    = opt.get("implied_volatility")
-
-                if delta is None or not (-0.20 <= float(delta) <= -0.10):
-                    reject_counts["delta_oob"] = reject_counts.get("delta_oob", 0) + 1
-                    continue
-                if not iv or float(iv) < 0.20:
-                    reject_counts["iv<20%"] = reject_counts.get("iv<20%", 0) + 1
+                delta = _bs_put_delta(stock_price, strike, T, iv)
+                if not (-0.20 <= delta <= -0.10):
                     continue
 
-                delta = float(delta)
-                iv    = float(iv)
-
-                live_price = underlying.get("price")
-                ref_price  = float(live_price) if live_price else stock_price
-
-                cushion = (ref_price - strike) / ref_price * 100
+                cushion = (stock_price - strike) / stock_price * 100
                 if cushion < 5:
-                    reject_counts["cushion<5%"] = reject_counts.get("cushion<5%", 0) + 1
                     continue
 
                 premium_yield = (bid / strike) * 100
                 if premium_yield < 1.0:
-                    reject_counts["yield<1%"] = reject_counts.get("yield<1%", 0) + 1
                     continue
-
-                exp_str = details.get("expiration_date", "")
-                dte     = (date.fromisoformat(exp_str) - today).days if exp_str else 0
 
                 candidates.append({
                     "symbol":            sym,
-                    "stock_price":       ref_price,
+                    "stock_price":       stock_price,
                     "strike":            strike,
                     "premium":           bid,
                     "delta":             delta,
@@ -371,11 +293,7 @@ def screen_options(tickers: list[str], prices: dict[str, float]) -> list[dict]:
                     "current_iv":        iv * 100,
                 })
 
-            if nonlocal_diag and reject_counts:
-                log.info(f"DIAG [{sym}] rejection counts: {reject_counts}")
-
-        except Exception as e:
-            log.warning(f"Error screening {sym}: {e}")
+        time.sleep(0.1)
 
     log.info(f"Options candidates: {len(candidates)}")
     return candidates

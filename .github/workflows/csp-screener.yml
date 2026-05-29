@@ -29,7 +29,6 @@ jobs:
 
       - name: Run screener
         env:
-          MASSIVE_API_KEY:           ${{ secrets.MASSIVE_API_KEY }}
           SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python scripts/csp_screener.py
