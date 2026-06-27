@@ -93,14 +93,14 @@ function finalizeChain(ch: BuildingChain, today: string): Chain {
   };
 }
 
-export function buildChains(txs: Transaction[]): Chain[] {
+export function buildChains(txs: Transaction[], today?: string): Chain[] {
   const chains: Chain[] = [];
   const openChains: Record<string, BuildingChain> = {};
   const putExpiryMap: Record<string, string> = {};     // expiry → chainId
   const callExpiryMap: Record<string, string[]> = {}; // expiry → chainId[] (multi-chain CCs)
   let chainCounter = 0;
 
-  const today = new Date().toISOString().slice(0, 10);
+  today = today ?? new Date().toISOString().slice(0, 10);
 
   // When a CC covers more contracts than any single ASSIGNED chain, distribute it
   // across multiple chains proportionally (most-recently-opened first).
@@ -345,6 +345,11 @@ export function buildChains(txs: Transaction[]): Chain[] {
       ch.status = "CLOSED";
       ch.closeDate = ch._lastCloseDate;
     }
+    // No Expired transaction was imported but the option is past its expiry date
+    if (ch.status === "OPEN" && ch.currentExpiry && ch.currentExpiry < today) {
+      ch.status = "EXPIRED";
+      ch.closeDate = ch.currentExpiry;
+    }
     chains.push(finalizeChain(ch, today));
   }
 
@@ -352,12 +357,12 @@ export function buildChains(txs: Transaction[]): Chain[] {
 }
 
 // Groups all transactions by underlying, runs buildChains per ticker, returns all chains.
-export function buildAllChains(txs: Transaction[]): Chain[] {
+export function buildAllChains(txs: Transaction[], today?: string): Chain[] {
   const byTicker: Record<string, Transaction[]> = {};
   for (const tx of txs) {
     const key = tx.underlying ?? "UNKNOWN";
     if (!byTicker[key]) byTicker[key] = [];
     byTicker[key].push(tx);
   }
-  return Object.values(byTicker).flatMap(buildChains);
+  return Object.values(byTicker).flatMap((t) => buildChains(t, today));
 }

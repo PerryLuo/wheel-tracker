@@ -42,7 +42,7 @@ describe("computeChainCostBasis() — PLTR", () => {
 
   it("returns effective cost basis for OPEN chains (strike minus net premiums)", () => {
     const tnaTxs = parseTicker("schwab-tna-sample.json", "TNA");
-    const tnaChains = buildChains(tnaTxs);
+    const tnaChains = buildChains(tnaTxs, "2026-03-10");
     const openChain = tnaChains.find((c) => c.status === "OPEN");
     const cb = computeChainCostBasis(openChain!);
     // OPEN chain: should return effective CB (strike - net premiums per share), not null

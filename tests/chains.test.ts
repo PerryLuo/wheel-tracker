@@ -20,7 +20,8 @@ function parseTicker(file: string, ticker: string): Transaction[] {
 // ─── TNA ──────────────────────────────────────────────────────────────────────
 describe("buildChains() — TNA", () => {
   const txs = parseTicker("schwab-tna-sample.json", "TNA");
-  const chains = buildChains(txs);
+  // Pin today so the 44P/03-13 chain stays OPEN (its expiry is 2026-03-13)
+  const chains = buildChains(txs, "2026-03-10");
 
   it("produces 4 chains", () => {
     expect(chains).toHaveLength(4);
