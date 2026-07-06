@@ -119,11 +119,28 @@ function WheelSummaryBlock({ chain }: { chain: Chain }) {
   );
 }
 
+const LEG_TYPE_ORDER: Record<string, number> = {
+  open: 0, roll_open: 0, call_open: 0,
+  roll_close: 1, assigned: 1, expired: 1, call_close: 1, call_expired: 1, call_assigned: 1,
+};
+
+function sortLegs(legs: Leg[]): Leg[] {
+  return legs.slice().sort((a, b) => {
+    if (a.date > b.date) return -1;
+    if (a.date < b.date) return 1;
+    const ea = a.expiry ?? "";
+    const eb = b.expiry ?? "";
+    if (ea < eb) return -1;
+    if (ea > eb) return 1;
+    return (LEG_TYPE_ORDER[a.chainType] ?? 1) - (LEG_TYPE_ORDER[b.chainType] ?? 1);
+  });
+}
+
 // ── Leg rows shown inside an expanded chain ───────────────────────────────────
 function LegRows({ legs }: { legs: Leg[] }) {
   return (
     <div style={{ backgroundColor: C.surface2 }}>
-      {[...legs].reverse().map((leg) => (
+      {sortLegs(legs).map((leg) => (
         <div
           key={leg.id}
           className="grid items-center gap-2 px-7 py-2 text-xs"
