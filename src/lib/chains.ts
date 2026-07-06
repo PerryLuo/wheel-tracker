@@ -286,7 +286,7 @@ export function buildChains(txs: Transaction[], refDate?: string): Chain[] {
     // ── BUY TO CLOSE (CALL) ─────────────────────────────────────
     if (action === "BTC" && optionType === "CALL") {
       const cids = callExpiryMap[expiry];
-      if (!cids?.length) return true;
+      if (!cids?.length) return false; // defer until same-day STO registers the expiry
       const validChains = cids.map((cid) => openChains[cid]).filter(Boolean);
       const totalContracts = validChains.reduce((s, c) => s + c.contracts, 0);
       for (const ch of validChains) {
