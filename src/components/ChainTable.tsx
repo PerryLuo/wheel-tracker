@@ -130,8 +130,8 @@ function sortLegs(legs: Leg[]): Leg[] {
     if (a.date < b.date) return 1;
     const ea = a.expiry ?? "";
     const eb = b.expiry ?? "";
-    if (ea < eb) return -1;
-    if (ea > eb) return 1;
+    if (ea > eb) return -1;
+    if (ea < eb) return 1;
     return (LEG_TYPE_ORDER[a.chainType] ?? 1) - (LEG_TYPE_ORDER[b.chainType] ?? 1);
   });
 }
