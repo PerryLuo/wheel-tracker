@@ -96,9 +96,15 @@ function finalizeChain(ch: BuildingChain, today: string): Chain {
 export function buildChains(txs: Transaction[], refDate?: string): Chain[] {
   const chains: Chain[] = [];
   const openChains: Record<string, BuildingChain> = {};
-  const putExpiryMap: Record<string, string> = {};     // expiry → chainId
+  const putExpiryMap: Record<string, string> = {};     // "strike|expiry" → chainId
   const callExpiryMap: Record<string, string[]> = {}; // expiry → chainId[] (multi-chain CCs)
   let chainCounter = 0;
+
+  // Puts must be keyed by strike AND expiry: two puts sharing an expiry but with
+  // different strikes are independent chains, and keying by expiry alone lets the
+  // later STO clobber the earlier one's mapping (misattributing later BTC/rolls).
+  const putKey = (strike: number | null, expiry: string): string =>
+    `${strike ?? ""}|${expiry}`;
 
   const today: string = refDate ?? new Date().toISOString().slice(0, 10);
 
@@ -169,7 +175,7 @@ export function buildChains(txs: Transaction[], refDate?: string): Chain[] {
         ch.legs.push(makeLeg(tx, "roll_open", amt));
         const newCapital = (tx.strike ?? 0) * contracts * 100;
         if (newCapital > ch.committedCapital) ch.committedCapital = newCapital;
-        putExpiryMap[expiry] = rollId;
+        putExpiryMap[putKey(tx.strike, expiry)] = rollId;
       } else {
         chainCounter++;
         const cid = `${tx.underlying ?? "X"}_${chainCounter}`;
@@ -194,27 +200,29 @@ export function buildChains(txs: Transaction[], refDate?: string): Chain[] {
           _awaitingRollOpen: false,
           _lastCloseDate: null,
         };
-        putExpiryMap[expiry] = cid;
+        putExpiryMap[putKey(tx.strike, expiry)] = cid;
       }
       return true;
     }
 
     // ── BUY TO CLOSE (PUT) ──────────────────────────────────────
     if (action === "BTC" && optionType === "PUT") {
-      const cid = putExpiryMap[expiry];
+      const key = putKey(tx.strike, expiry);
+      const cid = putExpiryMap[key];
       if (!cid || !openChains[cid]) return false; // defer — expiry not yet opened
       const ch = openChains[cid];
       ch.netPnl += amt;
       ch.legs.push(makeLeg(tx, "roll_close", amt));
       ch._awaitingRollOpen = true;
       ch._lastCloseDate = tx.date;
-      delete putExpiryMap[expiry];
+      delete putExpiryMap[key];
       return true;
     }
 
     // ── EXPIRED (PUT) ───────────────────────────────────────────
     if (action === "Expired" && optionType === "PUT") {
-      const cid = putExpiryMap[expiry];
+      const key = putKey(tx.strike, expiry);
+      const cid = putExpiryMap[key];
       if (!cid || !openChains[cid]) return true;
       const ch = openChains[cid];
       ch.legs.push(makeLeg(tx, "expired", 0));
@@ -224,20 +232,21 @@ export function buildChains(txs: Transaction[], refDate?: string): Chain[] {
       ch.currentStrike = null;
       ch.currentExpiry = null;
       chains.push(finalizeChain(ch, today));
-      delete putExpiryMap[expiry];
+      delete putExpiryMap[key];
       delete openChains[cid];
       return true;
     }
 
     // ── ASSIGNED (PUT) — stock acquired ─────────────────────────
     if (action === "Assigned" && optionType === "PUT") {
-      const cid = putExpiryMap[expiry];
+      const key = putKey(tx.strike, expiry);
+      const cid = putExpiryMap[key];
       if (!cid || !openChains[cid]) return true;
       const ch = openChains[cid];
       ch.legs.push(makeLeg(tx, "assigned", amt));
       ch.status = "ASSIGNED";
       ch.pendingPremium = 0;
-      delete putExpiryMap[expiry];
+      delete putExpiryMap[key];
       // stays in openChains for CC tracking
       return true;
     }
