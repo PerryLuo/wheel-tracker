@@ -219,6 +219,18 @@ function ChainRow({ chain, hideTicker }: { chain: Chain; hideTicker?: boolean })
                 chain {chain.chainId.slice(-6)}
               </span>
             )}
+            {chain.costBasis != null && hideTicker && (
+              <span
+                className="text-xs font-mono px-1.5 py-0.5 rounded"
+                style={{
+                  backgroundColor: "rgba(0,212,170,0.08)",
+                  color: C.accent,
+                  border: "1px solid rgba(0,212,170,0.2)",
+                }}
+              >
+                CB ${chain.costBasis.toFixed(2)}
+              </span>
+            )}
           </div>
         </td>
         <td className="px-3 py-2.5">
