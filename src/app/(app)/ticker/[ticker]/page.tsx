@@ -496,9 +496,9 @@ function CostBasisTable({ chains }: { chains: Chain[] }) {
     const shares = chain.contracts * 100;
     const netPremium = chain.legs.reduce((sum, l) => {
       if (l.chainType === "open" || l.chainType === "roll_open" || l.chainType === "call_open")
-        return sum + Math.abs(l.amount);
+        return sum + Math.abs(l.pnl);
       if (l.chainType === "roll_close" || l.chainType === "call_close")
-        return sum - Math.abs(l.amount);
+        return sum - Math.abs(l.pnl);
       return sum;
     }, 0);
 

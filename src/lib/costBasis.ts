@@ -16,9 +16,9 @@ export function computeChainCostBasis(chain: Chain): number | null {
       let putOut = 0;
       for (const leg of chain.legs) {
         if (leg.chainType === "open" || leg.chainType === "roll_open") {
-          putIn += Math.abs(leg.amount);
+          putIn += Math.abs(leg.pnl);
         } else if (leg.chainType === "roll_close") {
-          putOut += Math.abs(leg.amount);
+          putOut += Math.abs(leg.pnl);
         }
       }
       return (chain.currentStrike * shares - putIn + putOut) / shares;
@@ -41,16 +41,16 @@ export function computeChainCostBasis(chain: Chain): number | null {
         break;
       case "open":
       case "roll_open":
-        putIn += Math.abs(leg.amount);
+        putIn += Math.abs(leg.pnl);
         break;
       case "roll_close":
-        putOut += Math.abs(leg.amount);
+        putOut += Math.abs(leg.pnl);
         break;
       case "call_open":
-        callIn += Math.abs(leg.amount);
+        callIn += Math.abs(leg.pnl);
         break;
       case "call_close":
-        callOut += Math.abs(leg.amount);
+        callOut += Math.abs(leg.pnl);
         break;
     }
   }
@@ -74,20 +74,20 @@ export function computeWheelSummary(chain: Chain): WheelSummary | null {
     switch (leg.chainType) {
       case "open":
       case "roll_open":
-        putPremium += Math.abs(leg.amount);
+        putPremium += Math.abs(leg.pnl);
         break;
       case "roll_close":
-        putPremium -= Math.abs(leg.amount);
+        putPremium -= Math.abs(leg.pnl);
         break;
       case "assigned":
         putStrike = leg.strike ?? 0;
         shares = leg.quantity * 100;
         break;
       case "call_open":
-        callPremium += Math.abs(leg.amount);
+        callPremium += Math.abs(leg.pnl);
         break;
       case "call_close":
-        callPremium -= Math.abs(leg.amount);
+        callPremium -= Math.abs(leg.pnl);
         break;
       case "call_assigned":
         callStrike = leg.strike ?? 0;

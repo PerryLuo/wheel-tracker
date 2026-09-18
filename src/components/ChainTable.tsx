@@ -158,9 +158,9 @@ function LegRows({ legs }: { legs: Leg[] }) {
           </span>
           <span
             className="font-mono text-right"
-            style={{ color: moneyColor(leg.amount) }}
+            style={{ color: moneyColor(leg.pnl) }}
           >
-            {leg.amount === 0 ? "—" : fmtMoney(leg.amount, true)}
+            {leg.pnl === 0 ? "—" : fmtMoney(leg.pnl, true)}
           </span>
         </div>
       ))}
